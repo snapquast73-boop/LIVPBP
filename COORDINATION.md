@@ -32,7 +32,7 @@ StatsAPI. Reconstruction deviations are published on `flagged.html`.
 | T4 | Reconstruct pages (`scoreboard.js`, `game.js`, `props.js`, `reviews-feed.js`) + stylesheet | done | 681bfa13 | `assets/css/style.css`, `assets/js/scoreboard.js`, `assets/js/game.js`, `assets/js/props.js`, `assets/js/reviews-feed.js` |
 | T5 | Flagged for Review page + footer links + README demo link | done | 681bfa13 | `flagged.html`, footers of `index.html`/`game.html`/`reviews.html`, `README.md` |
 | T6 | Local verification (syntax, link check, server smoke test) | done | 681bfa13 | `tools/restoration-check.mjs` |
-| T7 | Integration: PR to `main`, merge, confirm GitHub Pages deploy | in progress | 681bfa13 | (GitHub) |
+| T7 | Integration: PR to `main`, merge, confirm GitHub Pages deploy | done | 681bfa13 | (GitHub) |
 
 Rules honoured from the brief: small frequent commits; `git pull --rebase`
 before every push; never mark anything verified without an official source
@@ -71,3 +71,21 @@ linked; unverified values are left blank and flagged, not inferred.
 - Independently checked MLB's [sample schedule](https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=2025-10-25&hydrate=probablePitcher), the corresponding [live-feed response](https://statsapi.mlb.com/api/v1.1/game/813026/feed/live), and [structured replay fields](https://statsapi.mlb.com/api/v1/game/813026/playByPlay?fields=allPlays,reviewDetails,isOverturned,reviewType,challengeTeamId). These are historical sample checks, not verification of every MLB record or original-site parity. See [Pages deployment history](https://github.com/snapquast73-boop/LIVPBP/deployments/github-pages) for the published revisions.
 
 - The first pre-push rebase tried to flatten the integration merge and replay PR #4, causing a duplicate-board conflict. Aborted that rebase to retain the resolved merge; used a merge-preserving rebase before pushing.
+
+- 2026-11-20 — 681bfa13: INTEGRATION DONE.
+  [PR #4](https://github.com/snapquast73-boop/LIVPBP/pull/4) merged to `main`
+  (merge commit `e6e0ebfd27e2b70a2e2156aaa64bcf8f2d607117`, 2026-11-20T22:19:25Z).
+  GitHub Pages build for that commit reached status `built`; live site,
+  `/flagged.html` and `/assets/js/scoreboard.js` confirmed at
+  https://snapquast73-boop.github.io/LIVPBP/ . PR #3 (parallel session
+  `f8d351d0`) then merged its handoff + `site-check` workflow on top.
+  This session's first PR #5 attempt conflicted with that; resolved by
+  rebasing onto `origin/main` and merging both board versions — no other
+  session's work discarded (log entry required by the conflict rule).
+- 2026-11-20 — 681bfa13: addressed the two "needs review" requests from the
+  PR #3 handoff in the follow-up PR: (1) linescore/box-score rows in
+  `assets/js/game.js` now carry per-row official StatsAPI source links and
+  absent player names render as an unverified blank instead of a
+  substituted `Player <id>` label; (2) `404.html` now resolves its
+  stylesheet/home link from the project root so nested Pages 404 paths
+  still style and navigate correctly.
