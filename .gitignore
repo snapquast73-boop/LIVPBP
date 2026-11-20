@@ -9,3 +9,4 @@ node_modules/
 
 # Local server persistence store (runtime data, never committed)
 data/
+

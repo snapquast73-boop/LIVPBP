@@ -199,6 +199,8 @@ linked; unverified values are left blank and flagged, not inferred.
 | Site checks on `main` | run 44828682775 → **success** (`test` job + `dom-smoke` job) |
 | GitHub Pages build | `pages/builds/latest` → `status: "built"` for commit `9274cab`, duration 50.2 s |
 | Live site | https://snapquast73-boop.github.io/LIVPBP/ · `/flagged.html` · `/assets/js/*.js` all serving the rebuilt files |
+| Follow-up PR | [#9](https://github.com/snapquast73-boop/LIVPBP/pull/9) — **MERGED** (`395905c4c7f6b9da7c537761f9924a2c89a94422`), corrected the published check counts; Pages build `built` |
+| Final `main` state | site checks run 44829042200 → **success**; Pages build for `395905c` → `status: "built"` (78 s) |
 | Test suites | `npm test` → 40 passed, 0 failed · `node tools/restoration-check.mjs` → ALL CHECKS PASSED |
 | Flagged items | `flagged.html` (U-1…U-11, I-8, plus the preserved F-001…F-009 and R-1…R-4) |
 
@@ -207,25 +209,63 @@ Deployment confirmation detail: the first fetch of a deployed asset right after 
 cache-busting query and matched this branch's implementation (`LIVE_POLL_MS = 500`, `STATUS_SWEEP_MS = 125`,
 `renderIfChanged`, `offerRecentDate`). No action needed; CDN entries expire on their own.
 
+## File ownership after this integration (important for later sessions)
+
+The nine front-end assets on `main` (`assets/css/style.css`, `assets/js/*.js`) are the
+implementation described above: contract-complete against the pages and README, with the
+per-row source links from F-009. **Do not replace them wholesale from another branch** — that
+is what caused the conflict this board records. If a later session needs to change behaviour,
+send a pull request that edits the specific function and keeps `npm test` (40 checks) and
+`node tools/restoration-check.mjs` green. `flagged.html`, `docs/verification-report.md` and
+`tools/smoke-test.mjs` are the verification record: extend them, never truncate them.
+
 ## Request log
 
 | When | From | To | Request | Status |
 |---|---|---|---|---|
 | 2026-11-20 | `arena-f7276bda` | owner | Review `flagged.html` U-1…U-11 (model constants, colour palette, headshot URL, cadence, static-hosting limits) | needs review |
 
+### 2026-11-20 — 7e3aaa61 — independent re-verification of the merged rebuild (PR #7)
+
+- After PR #6 (session `f7276bda`) rebuilt the front end on top of the earlier restoration, this
+  session re-ran its own harness against `origin/main` **before** merging anything else.
+- **One real rendering bug found on `main` and fixed here:** `assets/js/game.js` read team
+  names/logos from `gameData.teams.<side>.team`. The official `feed/live` response returns that node
+  **flat** (`{id,name,abbreviation,teamName,…,record{…}}`), so the game page header rendered the score
+  with no team names and no logos. Confirmed by fetching the unprojected
+  `https://statsapi.mlb.com/api/v1.1/game/824638/feed/live` (no `fields` parameter, so the shape cannot
+  have been altered by projection) and re-checked with `tests/jsdom-render-test.mjs`, which failed 2
+  checks on `main` and passes after the fix (`teamNode()` accepts the flat and the nested shape). The
+  nested `team` object is the `/api/v1/schedule` shape, not the feed shape.
+- Re-verified against official responses (2026-11-20): schedule hydration + `review` counters
+  (15-game slate 2026-08-28); `gameData.review` on 744932 with no `absChallenges` (2024) and
+  `absChallenges{usedSuccessful,usedFailed,remaining}` on 824638 (2026); play `reviewDetails`
+  (`reviewType:"MI"`, game 824474 play 65); runner `isScoringEvent`/`playIndex`; `gameStatus` registry
+  (`IH`, `M*`, `N*`, `MJ`="Player challenge: Pitch Result", `NJ`="Umpire Challenge: Pitch Result");
+  `eventTypes` (`os_ruling_pending_primary/_prior`); `people/{id}/stats`; `fields` projection; Pages
+  config; upstream 404. Table: `docs/statsapi-field-map.md`.
+- **Merged `main` (PR #6) into this branch, resolving conflicts without discarding either side:**
+  kept the rebuilt assets, `package.json`, `tools/smoke-test.mjs`, the `site-check` workflow, the
+  rebuild report (`docs/verification-report.md`) and the richer `flagged.html`; added this session's
+  `tests/**` harness, field map (`docs/statsapi-field-map.md`), flagged sections 7–8 (re-verification
+  table + runnable checks), the README restoration note, `.nojekyll`, and the `data/` ignore rule.
+  Nothing from PR #3/#4/#5/#6 was deleted or rewritten.
+- Harness results on the merged tree: syntax OK · link-check 39 refs OK · contract-check OK
+  (`global.X` publication pattern now recognised) · jsdom render **37/37** · `tools/smoke-test.mjs`
+  and `tools/restoration-check.mjs` pass. PR: see the link recorded below after merge.
+
 ---
 
-# Session `arena/1f908513-livpbp` — Unclaimed Scope Completion & Live-API Integration Re-Verification
+# Session `arena/1f908513-livpbp` — Open `server.mjs` Fix & Final Live-StatsAPI Integration Re-Verification
 
 - **Session ID:** `1f908513` (branch fixed by Arena to `arena/1f908513-livpbp`, branched from `aef1a74`).
-- **Merge conflict resolution log (2026-11-20 UTC):** While this session was auditing live MLB StatsAPI responses, parallel sessions (`681bfa13`, `f8d351d0`, `f7276bda`) merged PRs #3–#9 to `main` (`395905c`). Merging `origin/main` produced an `add/add` conflict only on `COORDINATION.md`. Resolved by preserving 100% of `origin/main`'s `COORDINATION.md` and all merged files verbatim, then claiming only the remaining unclaimed/open items (`A6` on `server.mjs`, missing `docs/*` and `tools/*` referenced in `README.md`, and final integration re-verification against live 2026 MLB StatsAPI payloads).
+- **Merge conflict resolution log (2026-11-20 UTC):** Merged `origin/main` (`5a06fef`, incorporating PRs #3–#10 from sessions `681bfa13`, `f8d351d0`, `f7276bda`, and `7e3aaa61`). Conflict occurred only on `COORDINATION.md` and was resolved by preserving 100% of `origin/main`'s board, notes, and merged files verbatim. Respecting `7e3aaa61`'s `README.md` note on F-003 (not recreating the unuploaded private `tools/*.mjs` notes) and `f7276bda`'s ownership guidance (targeted function-level bug fixes only, extending tests and verification records without truncating any prior session's work).
 
 ## Task Board (`arena/1f908513-livpbp`)
 
 | Task ID | Task Description | Status | Owning Session | File Scope |
 | --- | --- | --- | --- | --- |
-| `S1f-1` | Fix open irregularity `A6` in `server.mjs` (`decodeURIComponent` malformed-URI guard + `REPO_DIR + path.sep` sibling-directory containment check) | `in progress` | `arena/1f908513-livpbp` | `server.mjs` |
-| `S1f-2` | Restore missing documentation & workflow files linked from `README.md` so no Markdown/site links 404 | `in progress` | `arena/1f908513-livpbp` | `docs/api-compliance.md`, `docs/scoring-changes.md`, `docs/workflows/pages.yml`, `docs/workflows/smoke.yml`, `docs/verification-report.md` |
-| `S1f-3` | Restore all 16 deterministic `tools/*.mjs` self-check & derivation scripts plus `tools/run-risk-preview.html` referenced in `README.md` | `in progress` | `arena/1f908513-livpbp` | `tools/hit-model-test.mjs`, `tools/review-test.mjs`, `tools/reviews-feed-test.mjs`, `tools/replay-feed-render-test.mjs`, `tools/review-probe-test.mjs`, `tools/review-status-test.mjs`, `tools/review-watcher-test.mjs`, `tools/page-status-watcher-test.mjs`, `tools/api-rate-limit-test.mjs`, `tools/official-scoring-test.mjs`, `tools/api-fields-test.mjs`, `tools/scoring-change-test.mjs`, `tools/feed-log-persistence-test.mjs`, `tools/cross-browser-persistence-test.mjs`, `tools/model-calibration-report.mjs`, `tools/count-model-derivation.mjs`, `tools/run-risk-preview.html` |
-| `S1f-4` | Final integration line-by-line re-verification & live-StatsAPI bug fixes (`gameData.teams` direct shape in `game.js`, `expectedStatistics.avg` xBA & `vsPlayerTotal` H2H in `props.js`, `MF` fallback & PA-ending `MJ` counts in `reviews.js`, per-row official source links & unverified blank value cells in `flagged.html`) | `in progress` | `arena/1f908513-livpbp` | `assets/js/game.js`, `assets/js/props.js`, `assets/js/reviews.js`, `flagged.html` |
-| `S1f-5` | Full build/link/DOM/server verification, PR to `main`, merge, and GitHub Pages live deployment confirmation | `in progress` | `arena/1f908513-livpbp` | `COORDINATION.md` |
+| `S1f-1` | Resolve open item `A6` in `server.mjs` (`decodeURIComponent` `URIError` HTTP 400 guard + strict `REPO_DIR + path.sep` sibling-directory containment check) | `done` | `arena/1f908513-livpbp` | `server.mjs` |
+| `S1f-2` | Targeted live-StatsAPI fixes in `props.js`, `game.js`, and `reviews.js`: (a) `expectedStatistics` uses `stat.avg` for xBA on live StatsAPI (`682829`, `656849`), (b) `vsPlayer` returns `vsPlayerTotal`/`vsPlayer` blocks rather than `season`, plus combined `!split.team` row preference on multi-team players, (c) `game.js` `seasonLine()` fallback to `liveData.boxscore.teams.<side>.players.ID<id>.seasonStats`, (d) `reviews.js` `MF` fallback reason, `events[last].index` matching in `runsForEvent`, and PA-ending `MJ` pitch counts (`823424` play 36, `824638` plays 72 & 86) | `in progress` | `arena/1f908513-livpbp` | `assets/js/props.js`, `assets/js/game.js`, `assets/js/reviews.js` |
+| `S1f-3` | Extend `flagged.html`, `docs/statsapi-field-map.md`, and `docs/verification-report.md` (without truncating prior rows): fix `<built-in function id>` HTML defect in `R-3`, ensure every single table row has a clickable official `https://` source link and blank value cells on unverified items, and append Session `1f908513` live-API audit findings | `in progress` | `arena/1f908513-livpbp` | `flagged.html`, `docs/statsapi-field-map.md`, `docs/verification-report.md` |
+| `S1f-4` | Extend `tools/smoke-test.mjs` and `tests/jsdom-render-test.mjs` with regression checks for `expectedStatistics.avg`, `vsPlayerTotal`, `boxscore.seasonStats`, PA-ending `MJ`, `MF`, and `server.mjs` `A6`; run all suites + CI + Pages verification | `in progress` | `arena/1f908513-livpbp` | `tools/smoke-test.mjs`, `tests/jsdom-render-test.mjs`, `COORDINATION.md` |

@@ -428,6 +428,70 @@
       </tbody>
     </table>
 
+    <h2>7. Independent re-verification &amp; fixes (session <code>7e3aaa61</code>, 2026-11-20)</h2>
+    <p style="color:var(--muted);font-size:13px">
+      A second session re-checked the published code field by field against the official MLB StatsAPI
+      and ran the real pages end to end. It found and fixed one rendering bug, and confirmed the
+      response shapes the code depends on. Full field table:
+      <a href="docs/statsapi-field-map.md">docs/statsapi-field-map.md</a>.
+    </p>
+    <table class="verify">
+      <thead>
+        <tr><th>#</th><th>Checked</th><th>Official source</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>V-1</td>
+          <td><strong>Bug found and fixed:</strong> the game page read team names/logos from <code>gameData.teams.&lt;side&gt;.team</code>. The official feed returns that node <em>flat</em> (<code>{id,name,abbreviation,teamName,…,record{…}}</code>) with no nested <code>team</code> object, so the game header rendered scores with no team names and no logos. Both shapes are now accepted.</td>
+          <td><a href="https://statsapi.mlb.com/api/v1.1/game/824638/feed/live" target="_blank" rel="noopener">game/824638/feed/live</a></td>
+          <td class="status-ok">Fixed &amp; regression-tested</td>
+        </tr>
+        <tr>
+          <td>V-2</td>
+          <td>Schedule hydration: <code>review{hasChallenges,away{used,remaining},home{…}}</code>, <code>probablePitcher</code>, <code>decisions{winner,loser,save}</code>, <code>linescore{…}</code> on a 15-game slate.</td>
+          <td><a href="https://statsapi.mlb.com/api/v1/schedule?sportId=1&amp;date=2026-08-28&amp;hydrate=review,probablePitcher,decisions,linescore" target="_blank" rel="noopener">schedule 2026-08-28</a></td>
+          <td class="status-ok">Verified</td>
+        </tr>
+        <tr>
+          <td>V-3</td>
+          <td>ABS counters <code>gameData.absChallenges{hasChallenges,away{usedSuccessful,usedFailed,remaining},home{…}}</code> exist in 2026 and are <strong>absent</strong> for a 2024 game — so omitting the line (never zero-filling) is correct.</td>
+          <td><a href="https://statsapi.mlb.com/api/v1.1/game/824638/feed/live" target="_blank" rel="noopener">game/824638 (2026)</a> · <a href="https://statsapi.mlb.com/api/v1.1/game/744932/feed/live" target="_blank" rel="noopener">game/744932 (2024)</a></td>
+          <td class="status-ok">Verified</td>
+        </tr>
+        <tr>
+          <td>V-4</td>
+          <td>Play-level review event <code>allPlays[i].reviewDetails{isOverturned,inProgress,reviewType,challengeTeamId}</code> — observed <code>{"isOverturned":false,"inProgress":false,"reviewType":"MI","challengeTeamId":113}</code> (play 65).</td>
+          <td><a href="https://statsapi.mlb.com/api/v1/game/824474/playByPlay" target="_blank" rel="noopener">game/824474/playByPlay</a></td>
+          <td class="status-ok">Verified (one code)</td>
+        </tr>
+        <tr>
+          <td>V-5</td>
+          <td>Runs-at-risk inputs: <code>result{eventType,description,awayScore,homeScore,isOut}</code> and <code>runners[].details{isScoringEvent,rbi,earned,playIndex}</code> (observed <code>"isScoringEvent":true,"playIndex":3</code>).</td>
+          <td><a href="https://statsapi.mlb.com/api/v1/game/824474/playByPlay" target="_blank" rel="noopener">game/824474/playByPlay</a></td>
+          <td class="status-ok">Verified</td>
+        </tr>
+        <tr>
+          <td>V-6</td>
+          <td>End-to-end render of the shipped pages against fixtures whose values were copied verbatim from the responses above: <strong>37/37</strong> checks (scoreboard cards with the real 10–8 final, game header names/logos/score, play-by-play, review chips, linescore, all four game tabs, replay-feed rows/stats/tabs/toggles, 404), no uncaught errors.</td>
+          <td><a href="tests/jsdom-render-test.mjs">tests/jsdom-render-test.mjs</a> · <a href="tests/README.md">tests/README.md</a></td>
+          <td class="status-ok">Passing</td>
+        </tr>
+        <tr>
+          <td>V-7</td>
+          <td><strong>Could not be verified from the build environment:</strong> running the pages against the live API (outbound sockets to <code>statsapi.mlb.com</code> are blocked there; the API was read through a page-fetch channel instead) and the <code>mlbstatic.com</code> logo/headshot URLs (the image host answered HTTP 500 to that channel). Reproduce the live run with <code>node tests/jsdom-render-test.mjs --live</code>.</td>
+          <td><a href="https://statsapi.mlb.com/api/v1/schedule?sportId=1&amp;date=2026-08-28" target="_blank" rel="noopener">statsapi.mlb.com</a></td>
+          <td class="status-unverified">Unverified here</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>8. Checks you can run</h2>
+    <pre class="wrap" style="white-space:pre-wrap">npm install --no-save jsdom     # dev-only; the site itself has no dependencies
+node tests/run-all.mjs           # syntax · link check · DOM-contract check · end-to-end render
+node tests/jsdom-render-test.mjs --live   # same end-to-end render against the live StatsAPI
+node tools/smoke-test.mjs        # static routes + local server round-trip
+node server.mjs                  # optional persistence backend (feed log + SSE)</pre>
+
   </main>
 
   <footer class="site-footer">
