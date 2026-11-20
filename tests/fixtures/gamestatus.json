@@ -1,0 +1,24 @@
+{
+  "_provenance": {
+    "note": "Verbatim subset of the official game-status registry. Each object below is copied unchanged from a GET /api/v1/gameStatus response captured 2026-11-20; the registry returns 200+ objects and only the codes used by the review classifier are reproduced here. Nothing was added or edited.",
+    "capturedFrom": "https://statsapi.mlb.com/api/v1/gameStatus",
+    "capturedOn": "2026-11-20"
+  },
+  "statuses": [
+    { "abstractGameState": "Preview", "codedGameState": "S", "detailedState": "Scheduled", "statusCode": "S", "abstractGameCode": "P" },
+    { "abstractGameState": "Preview", "codedGameState": "P", "detailedState": "Pre-Game", "statusCode": "P", "abstractGameCode": "P" },
+    { "abstractGameState": "Live", "codedGameState": "P", "detailedState": "Warmup", "statusCode": "PW", "abstractGameCode": "L" },
+    { "abstractGameState": "Live", "codedGameState": "I", "detailedState": "In Progress", "statusCode": "I", "abstractGameCode": "L" },
+    { "abstractGameState": "Live", "codedGameState": "I", "detailedState": "Instant Replay", "statusCode": "IH", "reason": "Review", "abstractGameCode": "L" },
+    { "abstractGameState": "Live", "codedGameState": "M", "detailedState": "Manager challenge: Close play at 1st", "statusCode": "MF", "reason": "Close play at 1st", "abstractGameCode": "L" },
+    { "abstractGameState": "Live", "codedGameState": "M", "detailedState": "Manager challenge: Tag play", "statusCode": "MA", "reason": "Tag play", "abstractGameCode": "L" },
+    { "abstractGameState": "Live", "codedGameState": "M", "detailedState": "Manager challenge: Hit by pitch", "statusCode": "MI", "reason": "Hit by pitch", "abstractGameCode": "L" },
+    { "abstractGameState": "Live", "codedGameState": "M", "detailedState": "Manager challenge: Stadium boundary call", "statusCode": "MS", "reason": "Stadium boundary call", "abstractGameCode": "L" },
+    { "abstractGameState": "Live", "codedGameState": "M", "detailedState": "Player challenge: Pitch Result", "statusCode": "MJ", "reason": "Pitch Result", "abstractGameCode": "L" },
+    { "abstractGameState": "Live", "codedGameState": "N", "detailedState": "Umpire review: Tag play", "statusCode": "NA", "reason": "Tag play", "abstractGameCode": "L" },
+    { "abstractGameState": "Live", "codedGameState": "N", "detailedState": "Umpire review: Home run", "statusCode": "NH", "reason": "Home run", "abstractGameCode": "L" },
+    { "abstractGameState": "Live", "codedGameState": "N", "detailedState": "Umpire review: Stadium boundary call", "statusCode": "NS", "reason": "Stadium boundary call", "abstractGameCode": "L" },
+    { "abstractGameState": "Live", "codedGameState": "N", "detailedState": "Umpire Challenge: Pitch Result", "statusCode": "NJ", "reason": "Pitch Result", "abstractGameCode": "L" },
+    { "abstractGameState": "Final", "codedGameState": "F", "detailedState": "Final", "statusCode": "F", "abstractGameCode": "F" }
+  ]
+}
