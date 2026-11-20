@@ -76,11 +76,21 @@
 
   function linescoreOf(feed) { return (feed && feed.liveData && feed.liveData.linescore) || null; }
 
+  // gameData.teams.<side> shape, verified against the official feed/live response for game
+  // 824638 on 2026-11-20: it is FLAT — {id,name,abbreviation,teamName,...,record{...}} with no
+  // nested `team` object (the nested `team` shape belongs to /api/v1/schedule). Accept both here
+  // so a hydrated schedule or a feed payload can never leave the header without a team name.
+  function teamNode(feed, side) {
+    var data = (feed && feed.gameData && feed.gameData.teams) || {};
+    var node = data[side] || {};
+    return node.team ? node.team : node;
+  }
+
   function teamInfo(feed, side) {
     var data = (feed && feed.gameData && feed.gameData.teams) || {};
     var ls = linescoreOf(feed) || {};
     var lsTeams = ls.teams || {};
-    var team = (data[side] && data[side].team) || {};
+    var team = teamNode(feed, side);
     var record = (data[side] && (data[side].record || data[side].leagueRecord)) || null;
     return {
       side: side,
@@ -674,14 +684,8 @@
     if (!feed) return;
     var gameData = feed.gameData || {};
     var teams = {
-      away: {
-        id: gameData.teams && gameData.teams.away && gameData.teams.away.team ? gameData.teams.away.team.id : null,
-        name: gameData.teams && gameData.teams.away && gameData.teams.away.team ? gameData.teams.away.team.name : '',
-      },
-      home: {
-        id: gameData.teams && gameData.teams.home && gameData.teams.home.team ? gameData.teams.home.team.id : null,
-        name: gameData.teams && gameData.teams.home && gameData.teams.home.team ? gameData.teams.home.team.name : '',
-      },
+      away: { id: teamNode(feed, 'away').id || null, name: teamNode(feed, 'away').name || '' },
+      home: { id: teamNode(feed, 'home').id || null, name: teamNode(feed, 'home').name || '' },
     };
     state.reviews = Reviews.extractReviews(Reviews.playsOf(feed), {
       gamePk: state.gamePk, teams: teams, feed: feed,

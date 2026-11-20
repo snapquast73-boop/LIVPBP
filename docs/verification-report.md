@@ -1,7 +1,9 @@
 # Verification report — MLB Live PBP rebuild
 
 Date: 2026-11-20 · Session: `arena-f7276bda` · Branch: `arena/f7276bda-livpbp`
-Published summary: [`flagged.html`](../flagged.html) (the same evidence, rendered on the site)
+Published summary: [`flagged.html`](../flagged.html) (the same evidence, rendered on the site).
+Independent field-by-field re-verification of the StatsAPI responses the site reads (and the one
+rendering bug it found): [`docs/statsapi-field-map.md`](statsapi-field-map.md).
 
 Every claim below was checked against a source fetched during this session. Where a value could
 not be confirmed, the row is marked **Unverified** and the value is left blank — nothing is

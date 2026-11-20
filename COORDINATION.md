@@ -224,3 +224,32 @@ send a pull request that edits the specific function and keeps `npm test` (40 ch
 | When | From | To | Request | Status |
 |---|---|---|---|---|
 | 2026-11-20 | `arena-f7276bda` | owner | Review `flagged.html` U-1…U-11 (model constants, colour palette, headshot URL, cadence, static-hosting limits) | needs review |
+
+### 2026-11-20 — 7e3aaa61 — independent re-verification of the merged rebuild (PR #7)
+
+- After PR #6 (session `f7276bda`) rebuilt the front end on top of the earlier restoration, this
+  session re-ran its own harness against `origin/main` **before** merging anything else.
+- **One real rendering bug found on `main` and fixed here:** `assets/js/game.js` read team
+  names/logos from `gameData.teams.<side>.team`. The official `feed/live` response returns that node
+  **flat** (`{id,name,abbreviation,teamName,…,record{…}}`), so the game page header rendered the score
+  with no team names and no logos. Confirmed by fetching the unprojected
+  `https://statsapi.mlb.com/api/v1.1/game/824638/feed/live` (no `fields` parameter, so the shape cannot
+  have been altered by projection) and re-checked with `tests/jsdom-render-test.mjs`, which failed 2
+  checks on `main` and passes after the fix (`teamNode()` accepts the flat and the nested shape). The
+  nested `team` object is the `/api/v1/schedule` shape, not the feed shape.
+- Re-verified against official responses (2026-11-20): schedule hydration + `review` counters
+  (15-game slate 2026-08-28); `gameData.review` on 744932 with no `absChallenges` (2024) and
+  `absChallenges{usedSuccessful,usedFailed,remaining}` on 824638 (2026); play `reviewDetails`
+  (`reviewType:"MI"`, game 824474 play 65); runner `isScoringEvent`/`playIndex`; `gameStatus` registry
+  (`IH`, `M*`, `N*`, `MJ`="Player challenge: Pitch Result", `NJ`="Umpire Challenge: Pitch Result");
+  `eventTypes` (`os_ruling_pending_primary/_prior`); `people/{id}/stats`; `fields` projection; Pages
+  config; upstream 404. Table: `docs/statsapi-field-map.md`.
+- **Merged `main` (PR #6) into this branch, resolving conflicts without discarding either side:**
+  kept the rebuilt assets, `package.json`, `tools/smoke-test.mjs`, the `site-check` workflow, the
+  rebuild report (`docs/verification-report.md`) and the richer `flagged.html`; added this session's
+  `tests/**` harness, field map (`docs/statsapi-field-map.md`), flagged sections 7–8 (re-verification
+  table + runnable checks), the README restoration note, `.nojekyll`, and the `data/` ignore rule.
+  Nothing from PR #3/#4/#5/#6 was deleted or rewritten.
+- Harness results on the merged tree: syntax OK · link-check 39 refs OK · contract-check OK
+  (`global.X` publication pattern now recognised) · jsdom render **37/37** · `tools/smoke-test.mjs`
+  and `tools/restoration-check.mjs` pass. PR: see the link recorded below after merge.
