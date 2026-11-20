@@ -393,23 +393,27 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  let decodedPathname;
+  let decodedPath;
   try {
-    decodedPathname = decodeURIComponent(pathname);
-  } catch (_) {
-    sendError(res, 400, 'Malformed URL path');
+    decodedPath = decodeURIComponent(pathname);
+  } catch {
+    // Malformed % escape (e.g. "/%"): decodeURIComponent throws URIError.
+    // Answer 400 instead of letting the exception kill the process.
+    sendError(res, 400, 'Bad request');
     return;
   }
-
-  let safePath = path.normalize(decodedPathname).replace(/^(\.\.[\/\\])+/, '');
+  let safePath = path.normalize(decodedPath).replace(/^(\.\.[\/\\])+/, '');
   if (safePath === '/' || safePath === '') safePath = '/index.html';
   if (safePath === '/reviews') safePath = '/reviews.html';
   if (safePath === '/game') safePath = '/game.html';
 
-  const filePath = path.resolve(REPO_DIR, '.' + (safePath.startsWith('/') || safePath.startsWith('\\') ? safePath : '/' + safePath));
+  const filePath = path.join(REPO_DIR, safePath);
 
-  // Security check: ensure path stays strictly within REPO_DIR (reject sibling dirs sharing prefix)
-  if (filePath !== REPO_DIR && !filePath.startsWith(REPO_DIR + path.sep)) {
+  // Security check: ensure path is within REPO_DIR. Compare against
+  // REPO_DIR + separator so a sibling like "<repo>-evil" (which shares the
+  // string prefix) is not accepted.
+  const repoPrefix = REPO_DIR.endsWith(path.sep) ? REPO_DIR : REPO_DIR + path.sep;
+  if (filePath !== REPO_DIR && !filePath.startsWith(repoPrefix)) {
     sendError(res, 403, 'Forbidden');
     return;
   }

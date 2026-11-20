@@ -166,7 +166,7 @@
           <td>I-6</td>
           <td class="wrap"><code>server.mjs</code> robustness defects: <code>decodeURIComponent(pathname)</code> throws on a malformed <code>%</code> escape (uncaught → process exit), and the containment test <code>filePath.startsWith(REPO_DIR)</code> accepts sibling directories that share the prefix.</td>
           <td class="wrap"><code>server.mjs</code> static handler.</td>
-          <td class="wrap"><strong>Flagged, not changed</strong> (U-3) — the file is outside this task's scope and the local server is not used by GitHub Pages.</td>
+          <td class="wrap"><strong>Fixed 2026-11-20 by session <code>f132969c</code></strong> (U-3): malformed <code>%</code> escapes now return 400 instead of crashing the process, and the containment test requires a path separator so sibling-prefix directories are rejected. Verified locally: <code>/%</code> → 400, all static routes → 200, server stays up. GitHub Pages never runs <code>server.mjs</code>, so the live site is unaffected.</td>
         </tr>
         <tr>
           <td>I-7</td>
@@ -206,9 +206,9 @@
         <tr>
           <td>U-3</td>
           <td class="wrap"><code>server.mjs</code> crash + path-containment defects (I-6)</td>
-          <td class="wrap">Out of scope for the Pages fix; changing it would alter a file the original author shipped. Not exercised by GitHub Pages.</td>
+          <td class="wrap"><strong>Fixed 2026-11-20 by session <code>f132969c</code>:</strong> <code>decodeURIComponent</code> is now wrapped in try/catch (malformed escape → 400, no process exit) and containment compares against <code>REPO_DIR + path.sep</code>. Local check: <code>/%</code> → 400, <code>/</code>, <code>/reviews.html</code>, <code>/assets/js/api.js</code>, <code>/api/health</code> → 200. Not exercised by GitHub Pages (static hosting).</td>
           <td class="wrap">—</td>
-          <td class="status-flag">Flagged</td>
+          <td class="status-ok">Fixed</td>
         </tr>
         <tr>
           <td>U-4</td>
@@ -490,7 +490,45 @@
       </tbody>
     </table>
 
-    <h2>8. Checks you can run</h2>
+    <h2>8. Final functional pass (session <code>f132969c</code>, 2026-11-20)</h2>
+    <p style="color:var(--muted);font-size:13px">
+      Confirmed the published site on <code>main</code> @ <code>5a06fef</code> is live and
+      rendering (Pages build <code>built</code>; <code>/</code>, <code>/reviews.html</code> and
+      this page all serve). Fixed the last open crash bug and dead documentation links:
+    </p>
+    <table class="verify">
+      <thead>
+        <tr><th>#</th><th>Checked / fixed</th><th>Official source</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>W-1</td>
+          <td><strong><code>server.mjs</code> crash fixed (U-3/I-6):</strong> malformed <code>%</code> escape returns 400 instead of exiting the process; containment now requires a separator so sibling-prefix paths are rejected. Verified locally (400 on <code>/%</code>, 200 on all static routes + <code>/api/health</code>).</td>
+          <td>Local check only — <code>server.mjs</code> is not run by GitHub Pages (<a href="https://docs.github.com/en/pages/getting-started-with-github-pages/about-github-pages" target="_blank" rel="noopener">GitHub Pages docs</a>)</td>
+          <td class="status-ok">Fixed &amp; verified</td>
+        </tr>
+        <tr>
+          <td>W-2</td>
+          <td><strong>README dead runnable refs fixed:</strong> <code>tools/review-test.mjs</code>, <code>tools/model-calibration-report.mjs</code>, <code>tools/count-model-derivation.mjs</code> and <code>tools/run-risk-preview.html</code> do not exist in this repo (F-003). Each mention now points at the shipped equivalent (<code>tools/smoke-test.mjs</code>, <code>tests/jsdom-render-test.mjs</code>, <code>assets/js/props.js</code>) and states the original was not uploaded.</td>
+          <td><a href="https://github.com/snapquast73-boop/LIVPBP/tree/main/tools" target="_blank" rel="noopener">github.com/snapquast73-boop/LIVPBP/tree/main/tools</a></td>
+          <td class="status-ok">Fixed</td>
+        </tr>
+        <tr>
+          <td>W-3</td>
+          <td><strong><code>reviews.html</code> duplicate Flagged links merged</strong> into one footer link. No other page had the duplicate (<code>index.html</code>, <code>game.html</code> each have one).</td>
+          <td>Local file check</td>
+          <td class="status-ok">Fixed</td>
+        </tr>
+        <tr>
+          <td>W-4</td>
+          <td><strong>Reference-site parity:</strong> <code>reviews.html</code> compared line-by-line against the two working reference sites the owner named (<code>LIVPBP2</code>, <code>POSTSSNALRT</code>). Same structure, same script set, same element IDs — the only differences are the footer Flagged link wording and a Sound Lab link that exists only in <code>POSTSSNALRT</code> (not part of this repo's upload, so not added here).</td>
+          <td><a href="https://github.com/snapquast73-boop/LIVPBP2/blob/main/reviews.html" target="_blank" rel="noopener">LIVPBP2/reviews.html</a> · <a href="https://github.com/snapquast73-boop/POSTSSNALRT/blob/main/reviews.html" target="_blank" rel="noopener">POSTSSNALRT/reviews.html</a></td>
+          <td class="status-ok">Verified</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>9. Checks you can run</h2>
     <pre class="wrap" style="white-space:pre-wrap">npm install --no-save jsdom     # dev-only; the site itself has no dependencies
 node tests/run-all.mjs           # syntax · link check · DOM-contract check · end-to-end render
 node tests/jsdom-render-test.mjs --live   # same end-to-end render against the live StatsAPI
