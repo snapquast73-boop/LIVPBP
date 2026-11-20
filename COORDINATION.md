@@ -254,3 +254,7 @@ send a pull request that edits the specific function and keeps `npm test` (40 ch
 - Harness results on the merged tree: syntax OK · link-check 39 refs OK · contract-check OK
   (`global.X` publication pattern now recognised) · jsdom render **37/37** · `tools/smoke-test.mjs`
   and `tools/restoration-check.mjs` pass. PR: see the link recorded below after merge.
+
+## Session 346299e3 — published-site delivery check
+
+- **In progress**, owner `346299e3`, fixed branch `arena/346299e3-livpbp`. Scope: `tests/pages-delivery.mjs`, `.github/workflows/pages-delivery.yml`, this board entry. Check the actual Pages artifact against the deployed revision, independent of fixture tests. Existing client, data, flag-page and integration claims on other branches are left alone. [GitHub Pages configuration](https://api.github.com/repos/snapquast73-boop/LIVPBP/pages) and [deployment history](https://github.com/snapquast73-boop/LIVPBP/deployments/github-pages).
