@@ -265,7 +265,7 @@ const server = http.createServer((req, res) => {
   }
 
   const reqUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
-  const pathname = reqUrl.pathname.replace(/^\/LIVPBP(?=\/|$)/, '') || '/';
+  const pathname = reqUrl.pathname;
 
   // --- API Endpoints ---
 

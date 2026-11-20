@@ -1,6 +1,0 @@
-{
-  "name": "livpbp",
-  "private": true,
-  "scripts": {"test": "node --check server.mjs && node --test tests/*.test.cjs"},
-  "devDependencies": {"jsdom": "26.1.0"}
-}
