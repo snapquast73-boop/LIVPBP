@@ -9,7 +9,7 @@
 > What was done here: every missing asset was re-implemented against the pages' own DOM contract and
 > the **official MLB StatsAPI**, then verified — field by field, with the official response linked for
 > each one — in [`docs/verification-report.md`](docs/verification-report.md), and end-to-end with
-> `node tests/jsdom-render-test.mjs`. Known deviations from this README's description of the
+> `node tests/jsdom-render-test.mjs` (field map: `docs/statsapi-field-map.md`). Known deviations from this README's description of the
 > original (refresh cadence, the reduced hit-forecast drivers, the simplified review score tracker,
 > and every unverified item) are published on the
 > **[⚑ Flagged for Review](https://snapquast73-boop.github.io/LIVPBP/flagged.html)** page, with source

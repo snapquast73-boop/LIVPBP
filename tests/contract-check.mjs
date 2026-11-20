@@ -28,7 +28,10 @@ for (const page of pages) {
   for (const m of html.matchAll(/\bon[a-z]+\s*=\s*"([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*)\(/g)) {
     checks += 1;
     const [, obj, method] = m;
-    const definesGlobal = new RegExp(`window\\.${obj}\\s*=\\s*\\{`).test(js);
+    // Scripts are IIFEs that publish through `window.X = {...}`, `global.X = {...}`
+    // (IIFE parameter) or `globalThis.X = {...}`; accept every form.
+    const definesGlobal = new RegExp(`\\b(?:window|global|globalThis|self)\\.${obj}\\s*=\\s*\\{`).test(js) ||
+      new RegExp(`\\.${obj}\\s*=\\s*\\{`).test(js);
     const definesMethod = new RegExp(`\\b${method}\\s*:\\s*function`).test(js) ||
       new RegExp(`\\b${method}\\s*\\(`).test(js);
     if (!definesGlobal) problems.push(`${page}: handler ${obj}.${method}() but no script sets window.${obj}`);

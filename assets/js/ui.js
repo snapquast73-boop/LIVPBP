@@ -1,116 +1,197 @@
-/* ui.js — shared UI helpers: escaping, team logos/colours, count dots,
- * runners diamond, player headshots.
- * Team ids/names/abbreviations are loaded at runtime from the official
- * GET /api/v1/teams?sportId=1 endpoint (verified live 2026-11-20:
- * https://statsapi.mlb.com/api/v1/teams?sportId=1) — never hard-coded data.
- * Logo/headshot URL patterns are the ones documented in README.md
- * ("Team logos" / "Player headshots" rows of the endpoint table).
- */
-(function () {
+/* ============================================================================
+ * ui.js — shared presentation helpers
+ *
+ *   UI.esc / UI.attr          HTML escaping
+ *   UI.teamLogo / UI.headshot <img> with a graceful initials fallback
+ *   UI.TEAM_ABBR              official StatsAPI abbreviations (verified below)
+ *   UI.TEAM_COLORS            approximate club palette (visual only)
+ *   UI.countDots / UI.outsDots / UI.baseDiamond
+ *   UI.statusMeta             official status -> {label, cls, live}
+ *   UI.cardChips              review / scoring-change chips for a game card
+ * ==========================================================================*/
+(function (global) {
   'use strict';
 
-  // Presentation only (colours are styling, not data). Keyed by official team id.
+  var LOGO_BASE = 'https://www.mlbstatic.com/team-logos/team-cap-on-dark/';
+  var HEADSHOT_BASE = 'https://img.mlbstatic.com/mlb-photos/image/upload/' +
+    'd_people:generic:headshot:67:current.png/w_120,q_auto:best/v1/people/';
+
+  /* Official abbreviations, read from GET /api/v1/teams?sportId=1
+   * (verified 2026-11-20 — see docs/verification-report.md row T-2). */
+  var TEAM_ABBR = {
+    108: 'LAA', 109: 'AZ', 110: 'BAL', 111: 'BOS', 112: 'CHC', 113: 'CIN', 114: 'CLE', 115: 'COL',
+    116: 'DET', 117: 'HOU', 118: 'KC', 119: 'LAD', 120: 'WSH', 121: 'NYM', 133: 'ATH', 134: 'PIT',
+    135: 'SD', 136: 'SEA', 137: 'SF', 138: 'STL', 139: 'TB', 140: 'TEX', 141: 'TOR', 142: 'MIN',
+    143: 'PHI', 144: 'ATL', 145: 'CWS', 146: 'MIA', 147: 'NYY', 158: 'MIL',
+  };
+
+  /* Approximate club palette — presentation only, NOT an official source.
+   * Flagged for review on flagged.html (U-1). */
   var TEAM_COLORS = {
-    108: '#BA0021', 109: '#A71930', 110: '#DF4601', 111: '#BD3039', 112: '#0E3386',
-    113: '#C6011F', 114: '#00385D', 115: '#33006F', 116: '#0C2340', 117: '#EB6E1F',
-    118: '#004687', 119: '#005A9C', 120: '#AB0003', 121: '#FF5910', 133: '#003831',
-    134: '#FDB827', 135: '#FFC425', 136: '#005C5C', 137: '#FD5A1E', 138: '#C41E3A',
-    139: '#092C5C', 140: '#003278', 141: '#134A8E', 142: '#002B5C', 143: '#E81828',
-    144: '#CE1141', 145: '#27251F', 146: '#00A3E0', 147: '#003087', 158: '#FFC52F'
+    108: '#ba0021', 109: '#a71930', 110: '#df4601', 111: '#bd3039', 112: '#0e3386',
+    113: '#c6011f', 114: '#00385d', 115: '#33006f', 116: '#0c2340', 117: '#eb6e1f',
+    118: '#004687', 119: '#005a9c', 120: '#ab0003', 121: '#002d72', 133: '#003831',
+    134: '#fdb827', 135: '#2f241d', 136: '#0c2c56', 137: '#fd5a1e', 138: '#c41e3a',
+    139: '#092c5c', 140: '#003278', 141: '#134a8e', 142: '#002b5c', 143: '#e81828',
+    144: '#ce1141', 145: '#27251f', 146: '#00a3e0', 147: '#0c2340', 158: '#12284b',
   };
 
-  var teamsById = {}; // id -> {id,name,abbreviation,teamName}
-  var teamsPromise = null;
-
-  function esc(s) {
-    return String(s == null ? '' : s)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  function esc(value) {
+    return String(value === null || value === undefined ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
-  function loadTeams() {
-    if (!teamsPromise) {
-      teamsPromise = window.MLBApi.getTeams().then(function (data) {
-        ((data && data.teams) || []).forEach(function (t) { teamsById[t.id] = t; });
-        return teamsById;
-      }).catch(function () { return teamsById; }); // pages still render from schedule data
+  function teamId(team) {
+    if (!team) return null;
+    if (typeof team === 'number') return team;
+    if (team.team && team.team.id) return Number(team.team.id);
+    return team.id ? Number(team.id) : null;
+  }
+
+  function teamName(team) {
+    if (!team) return '';
+    if (team.team) return team.team.name || team.team.teamName || '';
+    return team.name || team.teamName || '';
+  }
+
+  function abbr(team) {
+    var id = teamId(team);
+    if (!id) return '';
+    if (TEAM_ABBR[id]) return TEAM_ABBR[id];
+    var name = teamName(team);
+    return name ? name.replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase() : '';
+  }
+
+  function initials(name) {
+    var parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return '?';
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+
+  /* Logo with an initials fallback if the CDN image is missing. */
+  function teamLogo(team, cls) {
+    var id = teamId(team);
+    var klass = cls || 'team-logo';
+    if (!id) return '<span class="team-logo-fallback">' + esc(abbr(team)) + '</span>';
+    return '<img class="' + klass + '" loading="lazy" alt="' + esc(abbr(team)) + '"' +
+      ' src="' + LOGO_BASE + id + '.svg"' +
+      ' onerror="this.replaceWith(Object.assign(document.createElement(\'span\'),' +
+      '{className:\'team-logo-fallback\',textContent:\'' + esc(abbr(team)) + '\'}))">';
+  }
+
+  function headshot(personId, name) {
+    if (!personId) return '<span class="headshot-fallback">' + esc(initials(name)) + '</span>';
+    var ini = esc(initials(name));
+    return '<img class="headshot" loading="lazy" alt="" src="' + HEADSHOT_BASE + encodeURIComponent(personId) +
+      '/headshot/67/current"' +
+      ' onerror="this.replaceWith(Object.assign(document.createElement(\'span\'),' +
+      '{className:\'headshot-fallback\',textContent:\'' + ini + '\'}))">';
+  }
+
+  function dots(filled, total, cls) {
+    var out = '';
+    for (var i = 0; i < total; i += 1) {
+      out += '<span class="dot' + (i < filled ? ' ' + cls : '') + '"></span>';
     }
-    return teamsPromise;
-  }
-  function team(id) { return teamsById[id] || null; }
-  function abbr(id, fallback) {
-    var t = teamsById[id];
-    return (t && t.abbreviation) || fallback || (id ? String(id) : '?');
-  }
-  function color(id) { return TEAM_COLORS[id] || '#5b6b7f'; }
-
-  function logoURL(teamId) {
-    return 'https://www.mlbstatic.com/team-logos/team-cap-on-dark/' + teamId + '.svg';
-  }
-  function logoImg(teamId, cls) {
-    if (!teamId) return '';
-    return '<img class="' + (cls || 'team-logo') + '" loading="lazy" alt="" src="' + logoURL(teamId) +
-      '" onerror="this.style.display=\'none\'">';
-  }
-  function headshotURL(playerId) {
-    return 'https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:67:current.png/w_213,q_auto:best/v1/people/' +
-      playerId + '/headshot/67/current';
-  }
-  function headshotImg(playerId, cls) {
-    if (!playerId) return '';
-    return '<img class="' + (cls || 'headshot') + '" loading="lazy" alt="" src="' + headshotURL(playerId) +
-      '" onerror="this.style.display=\'none\'">';
+    return out;
   }
 
-  function countDots(count) {
-    count = count || {};
-    var balls = count.balls || 0, strikes = count.strikes || 0, outs = count.outs || 0;
-    function dots(n, max, cls) {
-      var h = '';
-      for (var i = 0; i < max; i++) h += '<span class="dot ' + cls + (i < n ? ' on' : '') + '"></span>';
-      return h;
+  function countDots(balls, strikes) {
+    return '<span class="count-block">' +
+      '<span class="count-group"><span class="count-label">B</span>' + dots(Number(balls) || 0, 3, 'on-ball') + '</span>' +
+      '<span class="count-group"><span class="count-label">S</span>' + dots(Number(strikes) || 0, 2, 'on-strike') + '</span>' +
+      '</span>';
+  }
+
+  function outsDots(outs) {
+    return '<span class="count-group"><span class="count-label">OUT</span>' + dots(Number(outs) || 0, 3, 'on-out') + '</span>';
+  }
+
+  /* occupied: { first: bool, second: bool, third: bool, scoring: bool } */
+  function baseDiamond(occupied) {
+    var o = occupied || {};
+    function cls(on) { return on ? ' class="on"' : ''; }
+    return '<span class="base-diamond" title="Runners on base">' +
+      '<i data-base="2B"' + cls(o.second) + '></i>' +
+      '<i data-base="3B"' + cls(o.third) + '></i>' +
+      '<i data-base="1B"' + cls(o.first) + '></i>' +
+      '<i data-base="score"' + cls(o.scoring) + '></i>' +
+      '</span>';
+  }
+
+  /* Runners from a live feed's linescore. */
+  function occupancyFromLinescore(linescore) {
+    var off = (linescore && linescore.offense) || {};
+    var isTop = !!(linescore && linescore.isTopInning);
+    var battingHome = !isTop;
+    function on(baseSide) {
+      var runner = off[baseSide];
+      if (!runner) return false;
+      if (runner.id) return true;
+      return false;
     }
-    return '<span class="count-dots" title="' + balls + '-' + strikes + ', ' + outs + ' out">' +
-      '<span class="dot-row">' + dots(balls, 4, 'ball') + '</span>' +
-      '<span class="dot-row">' + dots(strikes, 3, 'strike') + '</span>' +
-      '<span class="dot-row">' + dots(outs, 3, 'out') + '</span></span>';
+    return {
+      first: on('first'),
+      second: on('second'),
+      third: on('third'),
+      scoring: false,
+      battingHome: battingHome,
+    };
   }
 
-  // offense: linescore.offense {first,second,third} player objects (or ids)
-  function hasRunner(base) { return !!(base && (base.id || base.fullName)); }
-  function diamond(offense) {
-    offense = offense || {};
-    var f = hasRunner(offense.first), s = hasRunner(offense.second), t = hasRunner(offense.third);
-    return '<span class="diamond" aria-label="runners">' +
-      '<span class="base b2' + (s ? ' on' : '') + '"></span>' +
-      '<span class="base b3' + (t ? ' on' : '') + '"></span>' +
-      '<span class="base b1' + (f ? ' on' : '') + '"></span></span>';
+  /* Official status -> label + class.  Review states come from the StatsAPI's
+   * own registry (the M and N families, plus IH); see docs/verification-report.md. */
+  function statusMeta(status) {
+    var s = status || {};
+    var code = s.statusCode || '';
+    var abstractState = s.abstractGameState || '';
+    var detailed = s.detailedState || '';
+    var isReview = /^[MN]/.test(code) || code === 'IH';
+    var label = detailed || abstractState || '—';
+    var cls = 'preview';
+    if (abstractState === 'Live' || abstractState === 'Final') {
+      cls = abstractState === 'Live' ? 'live' : 'final';
+    } else if (abstractState === 'Preview') {
+      cls = 'preview';
+    }
+    if (s.codedGameState === 'D' || s.codedGameState === 'C') cls = 'final';
+    return {
+      label: label,
+      cls: cls,
+      live: abstractState === 'Live',
+      final: abstractState === 'Final',
+      isReview: isReview,
+      reason: s.reason || '',
+      code: code,
+    };
   }
 
-  function ordinal(n) {
-    var s = ['th', 'st', 'nd', 'rd'], v = n % 100;
-    return n + (s[(v - 20) % 10] || s[v] || s[0]);
-  }
-  function inningLabel(linescore) {
-    if (!linescore || !linescore.currentInning) return '';
-    var half = linescore.inningHalf || linescore.currentInningState || '';
-    return (half ? half + ' ' : '') + (linescore.currentInningOrdinal || ordinal(linescore.currentInning));
+  function chip(text, cls, title) {
+    return '<span class="chip' + (cls ? ' ' + cls : '') + '"' +
+      (title ? ' title="' + esc(title) + '"' : '') + '>' + esc(text) + '</span>';
   }
 
-  window.UI = {
-    esc: esc,
+  global.UI = {
+    LOGO_BASE: LOGO_BASE,
+    TEAM_ABBR: TEAM_ABBR,
     TEAM_COLORS: TEAM_COLORS,
-    loadTeams: loadTeams,
-    team: team,
+    esc: esc,
+    teamId: teamId,
+    teamName: teamName,
     abbr: abbr,
-    color: color,
-    logoURL: logoURL,
-    logoImg: logoImg,
-    headshotURL: headshotURL,
-    headshotImg: headshotImg,
+    initials: initials,
+    teamLogo: teamLogo,
+    headshot: headshot,
     countDots: countDots,
-    diamond: diamond,
-    ordinal: ordinal,
-    inningLabel: inningLabel
+    outsDots: outsDots,
+    baseDiamond: baseDiamond,
+    occupancyFromLinescore: occupancyFromLinescore,
+    statusMeta: statusMeta,
+    chip: chip,
   };
-})();
+}(window));

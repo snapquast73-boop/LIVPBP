@@ -1,0 +1,16 @@
+{
+  "name": "mlb-live-pbp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MLB Live PBP — live MLB scoreboard, play-by-play and replay-review feed (static site, GitHub Pages).",
+  "homepage": "https://snapquast73-boop.github.io/LIVPBP/",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "test": "node tools/smoke-test.mjs",
+    "serve": "node server.mjs"
+  },
+  "devDependencies": {
+    "jsdom": "^31.0.1"
+  }
+}

@@ -1,351 +1,869 @@
-/* reviews-feed.js — All-games Replay Feed logic (reviews.html).
- * Reconstructed 2026-11-20 from the spec in reviews.html's footer + README:
- *  - scans every game on the date's schedule, parses review events from
- *    each game's official playByPlay (window.Reviews), plus status-based
- *    "under review" detection from the schedule status fields;
- *  - official-scorer pending rulings: plays whose result.eventType is
- *    os_ruling_pending_primary / os_ruling_pending_prior (event-type names
- *    as stated in reviews.html's footer; flagged unverified F-004);
- *  - official scoring changes: diffs each completed play's official
- *    classification (result.eventType / result.isOut / count.outs) against
- *    the previous poll's snapshot kept in the feed log;
- *  - runs-at-risk: Reviews.runsAtRisk (scoring movements on the reviewed
- *    event only); the ruling is never predicted;
- *  - challenges-remaining counters read as-is from the schedule's
- *    hydrate=review / feed gameData; absent counters are never zero-filled;
- *  - sound (one shared WebAudio chime) + desktop notification for
- *    run-at-risk, both off by default and remembered per browser;
- *  - persistence via window.FeedLog (localStorage + optional server.mjs).
- * Poll cadence of this reconstruction: 15s scans (+status sweep each scan);
- * the original's 125–250ms cadence is deviation F-005 in flagged.html.
- */
-(function () {
+/* ============================================================================
+ * reviews-feed.js — the all-games Replay Feed (reviews.html)
+ *
+ * Scans every game on the slate for review events and renders them as a live,
+ * chat-style feed:
+ *   - manager challenges (M*), umpire/crew-chief reviews (N*), instant replay
+ *     (IH), boundary calls (NH / fair-foul / catch-trap / stadium boundary)
+ *   - ABS pitch challenges (MJ/NJ) with count before/after
+ *   - official-scorer pending rulings (os_ruling_pending_*)
+ *   - official scoring changes, detected by diffing each completed play's
+ *     classification between polls
+ *
+ * Every tracked entry is persisted through feed-log.js (localStorage + the
+ * optional server store) and restored on the next visit.
+ * ==========================================================================*/
+(function (global) {
   'use strict';
 
-  var SCAN_MS = 15000;
-  var FETCH_CONCURRENCY = 4;
+  var MLB = global.MLB;
+  var UI = global.UI;
+  var Reviews = global.Reviews;
+  var FeedLog = global.FeedLog;
+
+  var SCAN_MS = 250;
+  var STATUS_SWEEP_MS = 125;
+  var FETCH_CONCURRENCY = 6;
+  var FINAL_GRACE_MS = 30 * 60 * 1000;
+  var SOUND_COOLDOWN_MS = 2500;
+
+  var PLAYBYPLAY_FIELDS = 'allPlays,about,atBatIndex,hasReview,isComplete,inning,halfInning,isTopInning,isScoringPlay,' +
+    'result,eventType,description,isOut,rbi,awayScore,homeScore,count,outs,matchup,batter,id,fullName,pitcher,' +
+    'playEvents,details,call,reviewDetails,isOverturned,inProgress,reviewType,challengeTeamId,runners,' +
+    'isScoringEvent,playIndex,movement,index,isPitch,type,startTime,endTime,hasOutcome';
+
+  var FILTERS = [
+    { id: 'all', label: 'All' },
+    { id: 'abs', label: 'ABS' },
+    { id: 'challenges', label: 'Challenges' },
+    { id: 'reviews', label: 'Reviews' },
+    { id: 'boundary', label: 'Boundary Calls' },
+    { id: 'under', label: 'Under Review' },
+    { id: 'risk', label: '⚠️ Runs at Risk' },
+    { id: 'scoring', label: '✏️ Scoring Changes' },
+  ];
 
   var state = {
-    date: null, games: [], entries: [], log: null, filter: 'all',
-    timer: null, nextPollAt: 0, soundOn: false, notifyOn: false,
-    audioCtx: null, lastChimeAt: 0, seenRiskKeys: {}, es: null, scanning: false
+    date: MLB.todayISO(),
+    filter: 'all',
+    games: [],
+    log: null,
+    entries: [],
+    snapshots: Object.create(null),
+    irregularities: Object.create(null),
+    finalSeen: Object.create(null),
+    nextDue: Object.create(null),
+    statusByPk: Object.create(null),
+    scanning: false,
+    scanError: null,
+    soundOn: false,
+    notifyOn: false,
+    lastChimeAt: 0,
+    lastScanAt: 0,
+    timers: { scan: null, sweep: null, countdown: null },
+    nextScanAt: 0,
+    lastRenderSignature: '',
   };
 
   function $(id) { return document.getElementById(id); }
-  function abbr(teamObj) {
-    var t = (teamObj && teamObj.team) || {};
-    return window.UI.abbr(t.id, t.abbreviation);
-  }
-  function matchupLabel(g) {
-    return abbr(g.teams.away) + ' @ ' + abbr(g.teams.home);
+
+  function statusLine(text, isError) {
+    var el = $('status-line');
+    if (!el) return;
+    el.textContent = text || '';
+    el.classList.toggle('is-error', !!isError);
   }
 
-  // ---------- sound: one gentle synthesized chime, shared by every alert ----------
-  function chime() {
+  function syncNav() {
+    var picker = $('date-picker');
+    if (picker && picker.value !== state.date) picker.value = state.date;
+    var label = $('date-label');
+    if (label) label.textContent = MLB.formatDateLabel(state.date);
+  }
+
+  function parseDate() {
+    var input = $('date-picker');
+    var value = input && input.value;
+    return MLB.isValidISODate(value) ? value : MLB.todayISO();
+  }
+
+  /* ------------------------------------------------------------ log helpers */
+
+  function upsertEntry(entry) {
+    if (!entry || !entry.id) return false;
+    var index = -1;
+    for (var i = 0; i < state.entries.length; i += 1) {
+      if (state.entries[i].id === entry.id) { index = i; break; }
+    }
     var now = Date.now();
-    if (!state.soundOn || now - state.lastChimeAt < 2500) return;
-    state.lastChimeAt = now;
-    try {
-      state.audioCtx = state.audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-      var ctx = state.audioCtx;
-      if (ctx.state === 'suspended') ctx.resume();
-      [523.25, 659.25, 783.99].forEach(function (freq, i) {
-        var o = ctx.createOscillator(), gain = ctx.createGain();
-        o.type = 'sine'; o.frequency.value = freq;
-        var t = ctx.currentTime + i * 0.14;
-        gain.gain.setValueAtTime(0.0001, t);
-        gain.gain.exponentialRampToValueAtTime(0.12, t + 0.03);
-        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
-        o.connect(gain); gain.connect(ctx.destination);
-        o.start(t); o.stop(t + 0.6);
-      });
-    } catch (e) { /* audio blocked until user interacts — documented in footer */ }
-  }
-  function notifyRisk(entry) {
-    if (!state.notifyOn || typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
-    try {
-      new Notification('⚠️ Runs at risk — ' + entry.matchupLabel, {
-        body: entry.review.kindLabel + ': ' + entry.review.runsAtRisk + ' run(s) credited to the reviewed event could come off the board.'
-      });
-    } catch (e) { /* non-fatal */ }
+    if (index === -1) {
+      entry.firstSeen = entry.firstSeen || now;
+      entry.lastSeen = now;
+      state.entries.push(entry);
+      return true;
+    }
+    var prev = state.entries[index];
+    var merged = Object.assign({}, prev, entry);
+    merged.firstSeen = prev.firstSeen || now;
+    merged.lastSeen = now;
+    if (prev.scoreTracker && entry.scoreTracker) {
+      merged.scoreTracker = Object.assign({}, prev.scoreTracker, entry.scoreTracker);
+      /* Never overwrite an observed "before" score with a later guess. */
+      if (prev.scoreTracker.before && !entry.scoreTracker.before) {
+        merged.scoreTracker.before = prev.scoreTracker.before;
+      }
+    }
+    state.entries[index] = merged;
+    return false;
   }
 
-  // ---------- scoring-change diff tracker ----------
-  function classify(play) {
-    var r = play.result || {};
-    return { eventType: r.eventType || r.event || null, isOut: r.isOut != null ? r.isOut : null, outs: play.count ? play.count.outs : null };
+  function noteIrregularity(gamePk, text) {
+    if (!gamePk || !text) return;
+    var list = state.irregularities[gamePk] || [];
+    if (list.indexOf(text) === -1) {
+      list.push(text);
+      state.irregularities[gamePk] = list.slice(-30);
+    }
   }
-  function classLabel(c) {
-    if (!c || !c.eventType) return null;
-    return c.eventType + (c.isOut ? ' (out)' : '');
+
+  function persist() {
+    if (!state.log) state.log = FeedLog.emptyPayload(state.date);
+    state.log.entries = state.entries.slice();
+    state.log.snapshots = state.snapshots;
+    state.log.irregularities = state.irregularities;
+    state.log.savedAt = Date.now();
+    FeedLog.save(state.date, state.log);
   }
-  function trackScoring(g, pbp) {
-    var log = state.log;
-    var gk = String(g.gamePk);
-    log.snapshots[gk] = log.snapshots[gk] || {};
-    (pbp.allPlays || []).forEach(function (play) {
-      if (!play.about || !play.about.isComplete) return;
-      var idx = String(play.atBatIndex);
-      var nowC = classify(play);
-      var prev = log.snapshots[gk][idx];
-      log.snapshots[gk][idx] = nowC;
-      if (prev && prev.eventType && nowC.eventType && prev.eventType !== nowC.eventType) {
-        var hasReview = !!play.reviewDetails;
-        if (hasReview) return; // stays on the review's row, per spec
-        var key = 'chg-' + play.atBatIndex + '-' + prev.eventType + '-to-' + nowC.eventType;
-        window.FeedLog.upsert(log, {
-          gamePk: g.gamePk,
-          review: {
-            id: key, kind: 'scoring-change', kindLabel: '✏️ Official scoring change',
-            atBatIndex: play.atBatIndex,
-            inning: play.about.inning, halfInning: play.about.halfInning,
-            description: (play.result && play.result.description) || null,
-            fromLabel: classLabel(prev), toLabel: classLabel(nowC),
-            awayScore: play.result ? play.result.awayScore : null,
-            homeScore: play.result ? play.result.homeScore : null,
-            source: 'StatsAPI result.eventType diff across polls (no scoring-change marker exists in the payload)'
-          },
-          firstSeen: Date.now(), lastSeen: Date.now(), matchupLabel: matchupLabel(g)
-        });
+
+  function adoptLog(log) {
+    if (!log) return;
+    state.log = log;
+    state.entries = Array.isArray(log.entries) ? log.entries.slice() : [];
+    state.snapshots = log.snapshots || Object.create(null);
+    state.irregularities = log.irregularities || Object.create(null);
+  }
+
+  /* ------------------------------------------------------------- scan cycle */
+
+  function flattenGames(payload) {
+    var out = [];
+    ((payload && payload.dates) || []).forEach(function (d) {
+      (d.games || []).forEach(function (g) { out.push(g); });
+    });
+    return out;
+  }
+
+  function teamsOf(game) {
+    return {
+      away: {
+        id: game.teams && game.teams.away && game.teams.away.team ? game.teams.away.team.id : null,
+        name: game.teams && game.teams.away && game.teams.away.team ? game.teams.away.team.name : '',
+      },
+      home: {
+        id: game.teams && game.teams.home && game.teams.home.team ? game.teams.home.team.id : null,
+        name: game.teams && game.teams.home && game.teams.home.team ? game.teams.home.team.name : '',
+      },
+    };
+  }
+
+  function finalGraceDelay(finalFirstSeen, elapsed) {
+    if (elapsed < 2 * 60 * 1000) return 1000;
+    if (elapsed < 5 * 60 * 1000) return 2500;
+    return 15000;
+  }
+
+  function shouldFetch(game, now) {
+    var status = (game.status && game.status.abstractGameState) || '';
+    var pk = game.gamePk;
+    if (status === 'Live') {
+      state.nextDue[pk] = now + SCAN_MS;
+      return true;
+    }
+    if (status === 'Final') {
+      if (!state.finalSeen[pk]) state.finalSeen[pk] = now;
+      var elapsed = now - state.finalSeen[pk];
+      if (elapsed > FINAL_GRACE_MS) return false;
+      var due = state.nextDue[pk] || 0;
+      if (now < due) return false;
+      state.nextDue[pk] = now + finalGraceDelay(state.finalSeen[pk], elapsed);
+      return true;
+    }
+    return false;
+  }
+
+  function fetchGame(game) {
+    return MLB.playByPlay(game.gamePk, { fields: PLAYBYPLAY_FIELDS, retries: 0 })
+      .then(function (payload) {
+        return { game: game, payload: payload };
+      })
+      .catch(function (err) {
+        return { game: game, payload: null, error: err };
+      });
+  }
+
+  function runLimited(items, limit, worker) {
+    var index = 0;
+    var active = 0;
+    return new Promise(function (resolve) {
+      if (!items.length) { resolve(); return; }
+      function next() {
+        if (index >= items.length && active === 0) { resolve(); return; }
+        while (active < limit && index < items.length) {
+          var item = items[index];
+          index += 1;
+          active += 1;
+          worker(item).then(function () {
+            active -= 1;
+            next();
+          });
+        }
       }
-      // Pending official-scorer ruling present in the official event type.
-      var et = (play.result || {}).eventType;
-      if (et === 'os_ruling_pending_primary' || et === 'os_ruling_pending_prior') {
-        window.FeedLog.upsert(log, {
-          gamePk: g.gamePk,
-          review: {
-            id: 'os-' + play.atBatIndex + '-' + et, kind: 'os-pending', kindLabel: '⏳ Official Scorer Ruling Pending',
-            atBatIndex: play.atBatIndex, inning: play.about.inning, halfInning: play.about.halfInning,
-            description: (play.result && play.result.description) || null,
-            awayScore: play.result ? play.result.awayScore : null,
-            homeScore: play.result ? play.result.homeScore : null,
-            source: 'StatsAPI result.eventType ' + et
-          },
-          firstSeen: Date.now(), lastSeen: Date.now(), matchupLabel: matchupLabel(g)
-        });
-      }
+      next();
     });
   }
 
-  // ---------- scan ----------
-  function pool(items, size, fn) {
-    var i = 0, out = new Array(items.length);
-    function next() {
-      if (i >= items.length) return Promise.resolve();
-      var cur = i++;
-      return fn(items[cur]).then(function (v) { out[cur] = v; }).then(next);
+  function ingestGame(result) {
+    if (!result || !result.payload) {
+      if (result && result.error && !(result.error && result.error.quiet)) {
+        state.scanError = result.error;
+      }
+      return;
     }
-    var workers = [];
-    for (var k = 0; k < Math.min(size, items.length); k++) workers.push(next());
-    return Promise.all(workers).then(function () { return out; });
+    var game = result.game;
+    var plays = Reviews.playsOf(result.payload);
+    var teams = teamsOf(game);
+    var meta = { gamePk: game.gamePk, teams: teams, feed: result.payload };
+
+    /* ---- reviews */
+    var reviews = Reviews.extractReviews(plays, meta);
+    reviews.forEach(function (review) {
+      var existing = state.entries.find(function (e) { return e.id === review.id; });
+      var before = existing && existing.scoreTracker && existing.scoreTracker.before ? existing.scoreTracker.before : null;
+
+      var scoreTracker = {
+        before: before,
+        possible: null,
+        actual: null,
+      };
+
+      if (review.inProgress) {
+        /* Call-on-field score while the review is still open = the score the
+         * review is deciding on.  Taken from the official linescore/result. */
+        scoreTracker.before = review.score || before;
+      } else {
+        scoreTracker.actual = review.scoreAfter || null;
+        if (!scoreTracker.before && review.scoreAfter && review.runsAtRiskCount === 0) {
+          /* Nothing was credited to the reviewed event, so the official score
+           * after the play is also the call-on-field score. */
+          scoreTracker.before = review.scoreAfter;
+        }
+        if (!scoreTracker.before) {
+          noteIrregularity(game.gamePk, 'Before-review score was not observed for ' + review.id + ' (page opened after the ruling).');
+        }
+      }
+      if (scoreTracker.before && review.runsAtRiskCount > 0) {
+        scoreTracker.possible = {
+          away: scoreTracker.before.away,
+          home: scoreTracker.before.home,
+        };
+        scoreTracker.possible[review.battingSide] = Math.max(0, scoreTracker.possible[review.battingSide] - review.runsAtRiskCount);
+      }
+
+      var entry = {
+        id: review.id,
+        kind: 'review',
+        gamePk: game.gamePk,
+        matchupLabel: UI.abbr(teams.away) + ' @ ' + UI.abbr(teams.home),
+        teams: teams,
+        review: review,
+        scoreTracker: scoreTracker,
+        firstSeenLabel: MLB.formatGameTime(game.gameDate),
+      };
+
+      var isNew = upsertEntry(entry);
+
+      if (isNew && !review.isABS) chime('review');
+      if (isNew && review.runsAtRiskCount > 0) {
+        chime('risk');
+        notifyRunAtRisk(review, teams);
+      }
+      if (review.runsAtRiskCount > 0 && review.inProgress) {
+        /* Keep the warning visible on every poll, but never re-chime. */
+        entry.warned = true;
+      }
+    });
+
+    /* ---- official-scorer pending rulings */
+    var pending = Reviews.pendingRulings(plays, meta);
+    pending.forEach(function (row) {
+      upsertEntry({
+        id: row.id,
+        kind: 'pending',
+        gamePk: game.gamePk,
+        matchupLabel: UI.abbr(teams.away) + ' @ ' + UI.abbr(teams.home),
+        teams: teams,
+        pending: row,
+        review: {
+          typeLabel: 'Official Scorer Ruling Pending',
+          reason: row.eventType === 'os_ruling_pending_primary' ? 'Primary event ruling pending' : 'Prior event ruling pending',
+          inningLabel: row.inningLabel,
+          description: row.description,
+          batter: { name: row.batter },
+          pitcher: { name: row.pitcher },
+          outcome: 'Pending',
+          isABS: false,
+          isBoundary: false,
+          runsAtRiskCount: 0,
+          family: 'pending',
+        },
+      });
+    });
+
+    /* ---- official scoring changes */
+    var snapshot = Reviews.snapshotPlays(plays);
+    var previous = state.snapshots[game.gamePk];
+    var diff = Reviews.diffSnapshots(previous, snapshot);
+    state.snapshots[game.gamePk] = snapshot;
+
+    diff.changes.forEach(function (change) {
+      upsertEntry({
+        id: game.gamePk + ':' + change.atBatIndex + ':scoring-change',
+        kind: 'scoring_change',
+        gamePk: game.gamePk,
+        matchupLabel: UI.abbr(teams.away) + ' @ ' + UI.abbr(teams.home),
+        teams: teams,
+        change: change,
+        review: {
+          typeLabel: 'Official Scoring Change',
+          reason: '',
+          inningLabel: change.inningLabel,
+          description: 'Initial call: ' + (change.from.description || '') + ' → Final: ' + (change.to.description || ''),
+          batter: { name: change.batter },
+          pitcher: { name: '' },
+          outcome: 'Reclassified',
+          isABS: false,
+          isBoundary: false,
+          runsAtRiskCount: 0,
+          family: 'scoring',
+        },
+      });
+      if (state.log) {
+        state.log.grace = state.log.grace || {};
+        state.log.grace[game.gamePk] = Date.now();
+      }
+    });
+
+    diff.edits.forEach(function (edit) {
+      noteIrregularity(game.gamePk, 'Play ' + edit.atBatIndex + ' edited without reclassification (' +
+        edit.inningLabel + ') — flagged, not corrected.');
+    });
+    diff.vanished.forEach(function (gone) {
+      noteIrregularity(game.gamePk, 'Play ' + gone.atBatIndex + ' (' + gone.inningLabel +
+        ') disappeared from the payload after being observed — flagged, not corrected.');
+    });
+
+    /* ---- counter regressions */
+    var reviewCounters = Reviews.managerCounters(result.payload.review || (game.review || null));
+    var absCounters = Reviews.absCounters(result.payload.absChallenges || null);
+    var regression = Reviews.counterRegression(state.counterCache && state.counterCache[game.gamePk], {
+      manager: reviewCounters, abs: absCounters,
+    });
+    if (regression) {
+      regression.forEach(function (note) {
+        noteIrregularity(game.gamePk, 'Official counter ' + note + ' — flagged, not corrected.');
+      });
+    }
+    state.counterCache = state.counterCache || Object.create(null);
+    state.counterCache[game.gamePk] = { manager: reviewCounters, abs: absCounters };
   }
 
   function scan() {
-    if (state.scanning || document.hidden) { scheduleNext(); return; }
+    if (state.scanning) return;
+    if (document.hidden) { scheduleScan(1000); return; }
     state.scanning = true;
-    window.MLBApi.getSchedule(state.date).then(function (data) {
-      var dates = (data && data.dates) || [];
-      state.games = (dates[0] && dates[0].games) || [];
-      return pool(state.games, FETCH_CONCURRENCY, function (g) {
-        return window.MLBApi.getPlayByPlay(g.gamePk).then(function (pbp) {
-          trackScoring(g, pbp);
-          window.Reviews.parsePlays(pbp.allPlays || [], { gamePk: g.gamePk }).forEach(function (r) {
-            var entry = { gamePk: g.gamePk, review: r, firstSeen: Date.now(), lastSeen: Date.now(), matchupLabel: matchupLabel(g) };
-            var before = state.log.entries.filter(function (e) { return window.FeedLog.entryKey(e) === window.FeedLog.entryKey(entry); })[0];
-            if (before) entry.firstSeen = before.firstSeen || entry.firstSeen;
-            window.FeedLog.upsert(state.log, entry);
-            // Alert once per review, and only for a review this page had
-            // already seen without the risk (never on first-ever sighting).
-            if (before && r.runsAtRisk > 0 && r.inProgress && !state.seenRiskKeys[window.FeedLog.entryKey(entry)]) {
-              state.seenRiskKeys[window.FeedLog.entryKey(entry)] = 1;
-              chime(); notifyRisk(entry);
-            }
-          });
-        }).catch(function () { /* one bad game feed must not kill the scan */ });
+    state.nextScanAt = Date.now() + SCAN_MS;
+
+    MLB.schedule(state.date, { ttl: 0, retries: 0 })
+      .then(function (payload) {
+        state.games = flattenGames(payload);
+        var now = Date.now();
+        var due = state.games.filter(function (g) { return shouldFetch(g, now); });
+        state.scanError = null;
+        if (!due.length) {
+          updateChrome();
+          renderIfChanged();
+          return null;
+        }
+        return runLimited(due, FETCH_CONCURRENCY, function (game) {
+          return fetchGame(game).then(ingestGame);
+        }).then(function () {
+          persist();
+          renderIfChanged();
+          updateChrome();
+        });
+      })
+      .catch(function (err) {
+        state.scanError = err;
+        updateChrome();
+      })
+      .then(function () {
+        state.scanning = false;
+        state.lastScanAt = Date.now();
+        scheduleScan(SCAN_MS);
       });
-    }).then(function () {
-      state._primed = true;
-      state.log = window.FeedLog.saveLocal(state.log);
-      window.FeedLog.pushServer(state.log);
-      state.entries = state.log.entries.slice();
-      render();
-      $('status-line').textContent = 'Updated ' + new Date().toLocaleTimeString() + ' · ' +
-        state.games.length + ' games · source: statsapi.mlb.com schedule + per-game playByPlay';
-    }).catch(function (err) {
-      $('status-line').textContent = 'Scan failed (' + err.message + '). Retrying…';
-    }).then(function () {
-      state.scanning = false;
-      scheduleNext();
-    });
   }
 
-  function scheduleNext() {
-    clearTimeout(state.timer);
-    state.nextPollAt = Date.now() + SCAN_MS;
-    state.timer = setTimeout(scan, SCAN_MS);
+  function scheduleScan(delay) {
+    clearTimeout(state.timers.scan);
+    state.nextScanAt = Date.now() + delay;
+    state.timers.scan = setTimeout(scan, delay);
   }
 
-  // ---------- rendering ----------
-  var FILTERS = [
-    ['all', 'All'], ['abs', 'ABS'], ['challenges', 'Challenges'], ['reviews', 'Reviews'],
-    ['boundary', 'Boundary Calls'], ['under', 'Under Review'], ['risk', '⚠️ Runs at Risk'],
-    ['changes', '✏️ Scoring Changes']
-  ];
-  function passes(e) {
-    var r = e.review;
-    if (state.filter === 'all') return r.kind !== 'abs'; // ABS lives in its own tab (README)
-    if (state.filter === 'abs') return r.kind === 'abs';
-    if (state.filter === 'challenges') return r.kind === 'challenge' || r.kind === 'abs';
-    if (state.filter === 'reviews') return r.kind === 'review' || r.kind === 'under-review';
-    if (state.filter === 'boundary') return r.kind === 'boundary';
-    if (state.filter === 'under') return r.inProgress || r.kind === 'under-review';
-    if (state.filter === 'risk') return r.runsAtRisk > 0;
-    if (state.filter === 'changes') return r.kind === 'scoring-change';
+  /* 125 ms official status sweep: catches a review the moment MLB flips it. */
+  function sweep() {
+    if (document.hidden) return;
+    if (!state.games.some(function (g) { return g.status && g.status.abstractGameState === 'Live'; })) return;
+    MLB.slateStatus(state.date).then(function (payload) {
+      var games = flattenGames(payload);
+      games.forEach(function (g) {
+        var review = Reviews.statusReview(g.status);
+        var prev = state.statusByPk[g.gamePk];
+        var nextKey = review ? review.code + '|' + review.reason : '';
+        if (prev !== nextKey) {
+          state.statusByPk[g.gamePk] = nextKey;
+          if (review) {
+            /* Out-of-band fetch: don't wait for the current scan to finish. */
+            fetchGame(g).then(function (result) {
+              ingestGame(result);
+              persist();
+              renderIfChanged();
+              updateChrome();
+            });
+          }
+        }
+      });
+    }).catch(function () { /* the scan owns error reporting */ });
+  }
+
+  /* ------------------------------------------------------------- sound/notify */
+
+  var audioCtx = null;
+
+  function chime(reason) {
+    if (!state.soundOn) return;
+    var now = Date.now();
+    if (now - state.lastChimeAt < SOUND_COOLDOWN_MS) return;
+    state.lastChimeAt = now;
+    try {
+      var Ctx = global.AudioContext || global.webkitAudioContext;
+      if (!Ctx) return;
+      if (!audioCtx) audioCtx = new Ctx();
+      if (audioCtx.state === 'suspended' && audioCtx.resume) audioCtx.resume();
+      var t0 = audioCtx.currentTime;
+      var master = audioCtx.createGain();
+      master.gain.value = 0.0001;
+      master.connect(audioCtx.destination);
+      master.gain.exponentialRampToValueAtTime(0.22, t0 + 0.05);
+      master.gain.exponentialRampToValueAtTime(0.0001, t0 + 1.5);
+
+      var echo = audioCtx.createDelay(0.5);
+      echo.delayTime.value = 0.22;
+      var echoGain = audioCtx.createGain();
+      echoGain.gain.value = 0.28;
+      master.connect(echo);
+      echo.connect(echoGain);
+      echoGain.connect(audioCtx.destination);
+
+      function drop(at, freq, dur) {
+        var osc = audioCtx.createOscillator();
+        var gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, at);
+        osc.frequency.exponentialRampToValueAtTime(freq * 0.9, at + dur);
+        gain.gain.setValueAtTime(0.0001, at);
+        gain.gain.exponentialRampToValueAtTime(0.6, at + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+        osc.connect(gain);
+        gain.connect(master);
+        osc.start(at);
+        osc.stop(at + dur + 0.05);
+      }
+
+      drop(t0 + 0.0, 1180, 0.18);
+      drop(t0 + 0.16, 880, 0.22);
+      drop(t0 + 0.34, 1320, 0.3);
+      drop(t0 + 0.52, 660, 0.7);
+      drop(t0 + 0.58, 990, 0.7);
+    } catch (e) { /* audio is a nicety, never a failure path */ }
+  }
+
+  function notifyRunAtRisk(review, teams) {
+    if (!state.notifyOn) return;
+    if (typeof global.Notification !== 'function') return;
+    if (global.Notification.permission !== 'granted') return;
+    try {
+      var title = '⚠️ Run at risk — ' + UI.abbr(teams.away) + ' @ ' + UI.abbr(teams.home);
+      var body = review.typeLabel + (review.reason ? ' (' + review.reason + ')' : '') +
+        ' · ' + review.inningLabel + ' — ' + review.runsAtRiskCount + ' run(s) credited to the reviewed play.';
+      new global.Notification(title, { body: body, tag: review.id });
+    } catch (e) { /* ignore */ }
+  }
+
+  function loadPref(key, fallback) {
+    try {
+      var raw = global.localStorage.getItem('mlbp.pref.' + key);
+      return raw === null ? fallback : raw === '1';
+    } catch (e) { return fallback; }
+  }
+
+  function savePref(key, value) {
+    try { global.localStorage.setItem('mlbp.pref.' + key, value ? '1' : '0'); } catch (e) { /* ignore */ }
+  }
+
+  /* ------------------------------------------------------------------ render */
+
+  function entryMatches(entry, filter) {
+    if (!entry) return false;
+    if (filter === 'all') return (entry.kind === 'review' || entry.kind === 'pending') && !(entry.review && entry.review.isABS);
+    if (filter === 'abs') return entry.review && entry.review.isABS;
+    if (filter === 'challenges') return entry.review && entry.review.family === 'manager';
+    if (filter === 'reviews') return entry.review && (entry.review.family === 'umpire' || entry.review.family === 'replay');
+    if (filter === 'boundary') return entry.review && entry.review.isBoundary;
+    if (filter === 'under') return entry.review && entry.review.inProgress;
+    if (filter === 'risk') return entry.review && entry.review.runsAtRiskCount > 0;
+    if (filter === 'scoring') return entry.kind === 'scoring_change';
     return true;
   }
 
-  function render() {
-    // Banner: scheduled games currently in review (official status fields).
-    var under = state.games.filter(function (g) { return window.Reviews.statusUnderReview(g.status); });
-    var banner = $('banner');
-    if (under.length) {
-      banner.className = 'banner show';
-      banner.innerHTML = '🚨 <b>Under review now:</b> ' + under.map(function (g) {
-        var hit = window.Reviews.statusUnderReview(g.status);
-        return '<a href="game.html?gamePk=' + g.gamePk + '">' + window.UI.esc(matchupLabel(g)) + '</a> (' +
-          window.UI.esc(hit.detailedState || 'review') + (hit.reason ? ' — ' + window.UI.esc(hit.reason) : '') + ')';
-      }).join(' · ');
-    } else { banner.className = 'banner'; banner.innerHTML = ''; }
+  function visibleEntries() {
+    return state.entries.filter(function (e) { return entryMatches(e, state.filter); })
+      .sort(function (a, b) { return (b.lastSeen || 0) - (a.lastSeen || 0); });
+  }
 
-    var riskActive = state.entries.filter(function (e) { return e.review.runsAtRisk > 0 && e.review.inProgress; });
-    var strip = $('active-strip');
-    strip.innerHTML = (riskActive.length
-      ? '<div class="risk-banner show">⚠️ <b>' + riskActive.length + ' active review' + (riskActive.length === 1 ? '' : 's') +
-        ' could take run(s) OFF the board:</b> ' + riskActive.map(function (e) {
-          return window.UI.esc(e.matchupLabel) + ' (' + e.review.runsAtRisk + ' at risk)';
-        }).join(' · ') + '</div>'
-      : '') + (under.length
-      ? '<div class="active-strip">' + under.map(function (g) {
-          return '<a class="active-card" href="game.html?gamePk=' + g.gamePk + '">🚨 ' + window.UI.esc(matchupLabel(g)) + ' — under review</a>';
-        }).join('') + '</div>'
-      : '');
-
-    var counts = { total: 0, abs: 0, mgr: 0, risk: 0, changes: 0 };
+  function statsFor() {
+    var s = { total: 0, manager: 0, umpire: 0, abs: 0, boundary: 0, under: 0, risk: 0, scoring: 0 };
     state.entries.forEach(function (e) {
-      counts.total += 1;
-      if (e.review.kind === 'abs') counts.abs += 1;
-      if (e.review.kind === 'challenge') counts.mgr += 1;
-      if (e.review.runsAtRisk > 0) counts.risk += 1;
-      if (e.review.kind === 'scoring-change') counts.changes += 1;
+      if (e.kind === 'scoring_change') { s.scoring += 1; return; }
+      if (e.kind !== 'review') return;
+      var r = e.review;
+      if (!r) return;
+      if (r.isABS) s.abs += 1; else s.total += 1;
+      if (r.family === 'manager') s.manager += 1;
+      if (r.family === 'umpire' || r.family === 'replay') s.umpire += 1;
+      if (r.isBoundary) s.boundary += 1;
+      if (r.inProgress) s.under += 1;
+      if (r.runsAtRiskCount > 0) s.risk += 1;
     });
-    $('feed-stats').innerHTML =
-      '<div class="stat-box"><b>' + counts.total + '</b>Tracked entries</div>' +
-      '<div class="stat-box"><b>' + counts.abs + '</b>ABS Challenges</div>' +
-      '<div class="stat-box"><b>' + counts.mgr + '</b>Manager Challenges</div>' +
-      '<div class="stat-box"><b>' + counts.risk + '</b>Runs at Risk</div>' +
-      '<div class="stat-box"><b>' + counts.changes + '</b>Scoring Changes</div>' +
-      '<div class="stat-box"><b>' + state.games.length + '</b>Games today</div>';
+    return s;
+  }
 
-    $('feed-tabs').innerHTML = FILTERS.map(function (f) {
-      return '<button class="tab-btn' + (state.filter === f[0] ? ' tab-on' : '') +
-        '" onclick="ReplayFeed.setFilter(\'' + f[0] + '\')">' + f[1] + '</button>';
+  function renderTabs() {
+    var nav = $('feed-tabs');
+    if (!nav) return;
+    nav.innerHTML = FILTERS.map(function (f) {
+      var count = state.entries.filter(function (e) { return entryMatches(e, f.id); }).length;
+      return '<button class="tab-btn' + (state.filter === f.id ? ' tab-on' : '') + '" data-filter="' + f.id + '">' +
+        UI.esc(f.label) + (count ? ' <span class="tab-badge">' + count + '</span>' : '') + '</button>';
     }).join('');
-
-    var rows = state.entries.filter(passes).slice().sort(function (a, b) {
-      return (b.review.atBatIndex || 0) - (a.review.atBatIndex || 0) || (b.firstSeen || 0) - (a.firstSeen || 0);
-    });
-    $('feed-list').innerHTML = rows.length ? rows.map(rowHTML).join('') :
-      '<div class="empty-note">No ' + state.filter + ' entries observed for ' +
-      window.UI.esc(window.MLBApi.prettyDate(state.date)) + ' yet. The feed fills as games are played and reviews occur; entries persist in this browser.</div>';
-    var dot = $('live-dot'); if (dot) dot.classList.add('on');
   }
 
-  function rowHTML(e) {
-    var r = e.review;
-    var score = (r.awayScore != null && r.homeScore != null)
-      ? '<span>Score after play: <b>' + r.awayScore + '–' + r.homeScore + '</b></span>' : '';
-    var risk = r.runsAtRisk > 0
-      ? '<span><b>Before review:</b> score as credited on the field · <b>' + r.runsAtRisk +
-        ' run(s) credited to the reviewed event could be removed if overturned</b> (possible score is runner-placement dependent and is not predicted)</span>'
-      : '';
-    return '<article class="feed-row' + (r.runsAtRisk > 0 && r.inProgress ? ' risk' : '') + '">' +
-      '<div class="feed-row-head"><span class="feed-row-title">' + window.UI.esc(r.kindLabel || 'Review') + '</span>' +
-      (r.runsAtRisk > 0 ? '<span class="chip chip-risk">⚠️ ' + r.runsAtRisk + ' RUN' + (r.runsAtRisk === 1 ? '' : 'S') + ' AT RISK</span>' : '') +
-      (r.inProgress ? '<span class="chip chip-review">UNDER REVIEW</span>' : '') +
-      (r.outcome ? '<span class="chip">' + window.UI.esc(r.outcome) + '</span>' : '') +
-      '<a href="game.html?gamePk=' + e.gamePk + '">' + window.UI.esc(e.matchupLabel || ('Game ' + e.gamePk)) + '</a>' +
-      (r.inning ? '<span>' + (r.halfInning === 'top' ? 'Top' : 'Bot') + ' ' + r.inning + '</span>' : '') + '</div>' +
-      (r.description ? '<div class="feed-row-desc">' + window.UI.esc(r.description) + '</div>' : '') +
-      (r.fromLabel ? '<div class="feed-row-meta">Initial call: ' + window.UI.esc(r.fromLabel) + ' → Final ruling: ' + window.UI.esc(r.toLabel || '') + '</div>' : '') +
-      '<div class="score-track">' + score + risk + '</div>' +
-      '<div class="feed-row-meta">Source: ' + window.UI.esc(r.source || 'StatsAPI') +
-      ' · first seen ' + (e.firstSeen ? new Date(e.firstSeen).toLocaleTimeString() : '—') + '</div></article>';
+  function renderStats() {
+    var el = $('feed-stats');
+    if (!el) return;
+    var s = statsFor();
+    var tiles = [
+      { n: s.total, label: 'Reviews', cls: '' },
+      { n: s.manager, label: 'Challenges', cls: '' },
+      { n: s.umpire, label: 'Umpire reviews', cls: '' },
+      { n: s.abs, label: 'ABS challenges', cls: '' },
+      { n: s.boundary, label: 'Boundary calls', cls: '' },
+      { n: s.under, label: 'Under review', cls: '' },
+      { n: s.risk, label: 'Runs at risk', cls: 'is-risk' },
+      { n: s.scoring, label: 'Scoring changes', cls: '' },
+    ];
+    el.innerHTML = tiles.map(function (t) {
+      return '<div class="stat-tile ' + t.cls + '"><div class="stat-num">' + t.n + '</div>' +
+        '<div class="stat-label">' + UI.esc(t.label) + '</div></div>';
+    }).join('');
   }
 
-  // ---------- date / controls ----------
-  function setDate(d) {
-    state.date = d;
-    if (state.es) { try { state.es.close(); } catch (e) {} state.es = null; }
-    state.log = window.FeedLog.loadLocal(d);
-    state.entries = state.log.entries.slice();
-    state._primed = false;
-    try {
-      var url = new URL(window.location.href);
-      url.searchParams.set('date', d);
-      window.history.replaceState(null, '', url);
-    } catch (e) { /* file:// */ }
-    $('date-picker').value = d;
-    $('date-label').textContent = window.MLBApi.prettyDate(d);
-    window.FeedLog.pullServer(d).then(function (srv) {
-      if (srv) { state.log = window.FeedLog.saveLocal(window.FeedLog.mergeInto(state.log, srv)); state.entries = state.log.entries.slice(); render(); }
-    });
-    state.es = window.FeedLog.subscribe(d, function (payload) {
-      state.log = window.FeedLog.saveLocal(window.FeedLog.mergeInto(state.log, payload));
-      state.entries = state.log.entries.slice();
-      render();
-    });
-    clearTimeout(state.timer);
+  function renderActiveStrip() {
+    var el = $('active-strip');
+    if (!el) return;
+    var active = state.entries.filter(function (e) { return e.review && e.review.inProgress; });
+    if (!active.length) { el.innerHTML = ''; return; }
+    el.innerHTML = '<div class="active-strip"><h3>Under review</h3><div class="active-items">' +
+      active.map(function (e) {
+        var r = e.review;
+        return '<div class="active-item">' +
+          '<a href="game.html?gamePk=' + encodeURIComponent(e.gamePk) + '"><b>' + UI.esc(e.matchupLabel || '') + '</b></a>' +
+          UI.chip(r.typeLabel + (r.reason ? ': ' + r.reason : ''), r.isABS ? 'chip-abs' : 'chip-review') +
+          '<span>' + UI.esc(r.inningLabel || '') + '</span>' +
+          (r.runsAtRiskCount ? UI.chip('⚠️ ' + r.runsAtRiskCount + ' run(s) at risk', 'chip-danger') : '') +
+          '</div>';
+      }).join('') + '</div></div>';
+  }
+
+  function scoreLine(label, score) {
+    if (!score) return '';
+    return '<dt>' + UI.esc(label) + '</dt><dd>' + UI.esc(score.away) + '–' + UI.esc(score.home) + '</dd>';
+  }
+
+  function renderRow(entry) {
+    var r = entry.review || {};
+    var tracker = entry.scoreTracker || {};
+    var cls = 'feed-row';
+    if (r.inProgress) cls += ' is-live';
+    if (r.runsAtRiskCount) cls += ' is-at-risk';
+
+    var avatar = r.isABS ? '🎯' : r.isBoundary ? '📏' : entry.kind === 'scoring_change' ? '✏️' : entry.kind === 'pending' ? '📝' : '🚨';
+
+    var chips = [];
+    chips.push(UI.chip(r.typeLabel || 'Review', r.isABS ? 'chip-abs' : 'chip-review'));
+    if (r.reason) chips.push(UI.chip(r.reason, 'chip-review'));
+    if (r.isBoundary) chips.push(UI.chip('Boundary call', 'chip-warn'));
+    if (r.inProgress) chips.push(UI.chip('Under review', 'chip-warn'));
+    else if (r.outcome) chips.push(UI.chip(r.outcome, r.outcome === 'Overturned' ? 'chip-ok' : ''));
+    if (r.runsAtRiskCount) chips.push(UI.chip('⚠️ ' + r.runsAtRiskCount + ' run(s) at risk', 'chip-danger'));
+
+    var trackerHtml = '';
+    if (entry.kind === 'review' && (tracker.before || tracker.possible || tracker.actual)) {
+      trackerHtml = '<dl class="score-track">' +
+        scoreLine('Before review', tracker.before) +
+        scoreLine('Possible after (conditional)', tracker.possible) +
+        scoreLine('Actual after (official)', tracker.actual) +
+        '</dl>';
+    }
+
+    var absLine = '';
+    if (r.isABS && r.absCountBefore) {
+      absLine = '<div class="feed-sub">Pitch ' + UI.esc(r.absPitchNumber) +
+        ' · count before ' + r.absCountBefore.balls + '-' + r.absCountBefore.strikes +
+        (r.absCountAfter ? ' · after ' + r.absCountAfter.balls + '-' + r.absCountAfter.strikes : '') + '</div>';
+    }
+
+    var counterText = '';
+    var cached = state.counterCache && state.counterCache[entry.gamePk];
+    if (cached && r.family === 'manager' && r.challengerSide && cached.manager && cached.manager[r.challengerSide]) {
+      counterText = Reviews.counterLine({ manager: cached.manager, side: r.challengerSide });
+    }
+    if (cached && r.isABS && r.challengerSide && cached.abs && cached.abs[r.challengerSide]) {
+      counterText = Reviews.counterLine({ abs: cached.abs, side: r.challengerSide });
+    }
+
+    var changeHtml = '';
+    if (entry.kind === 'scoring_change' && entry.change) {
+      changeHtml = '<div class="feed-sub">Initial call: ' + UI.esc(entry.change.from && entry.change.from.description ? entry.change.from.description : '') +
+        '</div><div class="feed-sub">Final ruling: ' + UI.esc(entry.change.to && entry.change.to.description ? entry.change.to.description : '') + '</div>' +
+        (entry.change.scoreAfter ? '<div class="feed-sub">Official score after the play: ' +
+          UI.esc(entry.change.scoreAfter.away) + '–' + UI.esc(entry.change.scoreAfter.home) + '</div>' : '') +
+        '<div class="feed-irregular">Attribution: ' + UI.esc(entry.change.attribution || '') + '</div>';
+    }
+
+    var pendingHtml = '';
+    if (entry.kind === 'pending' && entry.pending) {
+      pendingHtml = '<div class="feed-sub">' + UI.esc(entry.pending.description || '') + '</div>' +
+        '<div class="feed-irregular">Source: ' + UI.esc(entry.pending.source || '') + '</div>';
+    }
+
+    var irregularity = (state.irregularities[entry.gamePk] || [])[0];
+
+    return '<div class="' + cls + '">' +
+      '<div class="feed-avatar">' + avatar + '</div>' +
+      '<div class="feed-body">' +
+        '<div class="feed-top">' +
+          '<a href="game.html?gamePk=' + encodeURIComponent(entry.gamePk) + '"><b>' + UI.esc(entry.matchupLabel || '') + '</b></a>' +
+          '<span>' + UI.esc(r.inningLabel || '') + '</span>' +
+          (r.challengerSide && r.challengerSide !== 'unknown' && r.challenger
+            ? '<span>Challenged by ' + UI.esc(r.challenger) + '</span>' : '') +
+          '<span>' + new Date(entry.lastSeen || Date.now()).toLocaleTimeString() + '</span>' +
+        '</div>' +
+        '<div class="feed-title">' + UI.esc((r.batter && r.batter.name) || '') +
+          (r.pitcher && r.pitcher.name ? ' vs ' + UI.esc(r.pitcher.name) : '') + '</div>' +
+        (r.description ? '<div class="feed-sub">' + UI.esc(r.description) + '</div>' : '') +
+        absLine + changeHtml + pendingHtml +
+        (trackerHtml ? trackerHtml : '') +
+        (counterText ? '<div class="counter-note">' + UI.esc(counterText) + '</div>' : '') +
+        (irregularity ? '<div class="feed-irregular">⚠️ ' + UI.esc(irregularity) + '</div>' : '') +
+        '<div class="feed-chips">' + chips.join('') + '</div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  /* Same idea as the scoreboard: only touch the DOM when the tracked data
+   * actually changed, so a 250 ms scan does not re-create identical rows. */
+  function entriesSignature() {
+    return state.filter + '|' + state.entries.map(function (e) {
+      return [e.id, e.lastSeen, e.review && e.review.outcome, e.review && e.review.inProgress,
+        e.scoreTracker && e.scoreTracker.actual ? e.scoreTracker.actual.away + '-' + e.scoreTracker.actual.home : '',
+        e.scoreTracker && e.scoreTracker.before ? e.scoreTracker.before.away + '-' + e.scoreTracker.before.home : ''].join(':');
+    }).join('|');
+  }
+
+  function renderIfChanged() {
+    var sig = entriesSignature();
+    if (sig === state.lastRenderSignature) return;
+    state.lastRenderSignature = sig;
     render();
-    scan();
   }
 
-  window.ReplayFeed = {
-    prevDay: function () { setDate(window.MLBApi.addDays(state.date, -1)); },
-    nextDay: function () { setDate(window.MLBApi.addDays(state.date, 1)); },
-    today: function () { setDate(window.MLBApi.todayStr()); },
-    pickDate: function () { var v = $('date-picker').value; if (v) setDate(v); },
-    setFilter: function (f) { state.filter = f; render(); }
+  function render() {
+    renderTabs();
+    renderStats();
+    renderActiveStrip();
+    var list = $('feed-list');
+    if (!list) return;
+    var rows = visibleEntries();
+    list.innerHTML = rows.map(renderRow).join('');
+  }
+
+  function updateChrome() {
+    var label = $('countdown');
+    if (label) {
+      var left = Math.max(0, state.nextScanAt - Date.now());
+      label.textContent = document.hidden ? 'paused' : (left / 1000).toFixed(1) + 's';
+    }
+    var dot = $('live-dot');
+    if (dot) dot.style.opacity = state.scanError ? '0.3' : '1';
+    if (state.scanError) {
+      statusLine('Scan problem: ' + (state.scanError.message || 'network error') + ' — retrying.', true);
+    } else {
+      var live = state.games.filter(function (g) { return g.status && g.status.abstractGameState === 'Live'; }).length;
+      statusLine(state.games.length + ' game(s) on ' + MLB.formatDateLabel(state.date) +
+        ' · ' + live + ' live · ' + state.entries.length + ' tracked entr' + (state.entries.length === 1 ? 'y' : 'ies') +
+        ' · scanned ' + new Date(state.lastScanAt || Date.now()).toLocaleTimeString() +
+        (FeedLog.state.available ? ' · shared log connected' : ' · local log only'));
+    }
+  }
+
+  /* -------------------------------------------------------------------- nav */
+
+  function setDate(date) {
+    var clean = MLB.isValidISODate(date) ? date : MLB.todayISO();
+    if (clean === state.date) return;
+    state.date = clean;
+    state.entries = [];
+    state.snapshots = Object.create(null);
+    state.irregularities = Object.create(null);
+    state.finalSeen = Object.create(null);
+    state.nextDue = Object.create(null);
+    state.statusByPk = Object.create(null);
+    state.log = null;
+    syncNav();
+    render();
+    FeedLog.closeStream();
+    FeedLog.load(state.date).then(function (log) {
+      adoptLog(log);
+      render();
+      FeedLog.openStream(state.date);
+      FeedLog.onChange(function (pushed) {
+        if (pushed && pushed.date === state.date) {
+          adoptLog(FeedLog.mergePayloads(state.log, pushed, state.date));
+          render();
+        }
+      });
+      scan();
+    });
+  }
+
+  function setFilter(filter) { state.filter = filter; render(); }
+
+  function toggleSound() {
+    state.soundOn = !state.soundOn;
+    savePref('sound', state.soundOn);
+    var btn = $('sound-toggle-btn');
+    if (btn) {
+      btn.textContent = state.soundOn ? '🔊 Sound On' : '🔇 Sound Off';
+      btn.classList.toggle('btn-on', state.soundOn);
+    }
+    if (state.soundOn) chime('preview');
+  }
+
+  function toggleNotify() {
+    state.notifyOn = !state.notifyOn;
+    savePref('notify', state.notifyOn);
+    var btn = $('notify-toggle-btn');
+    if (btn) {
+      btn.textContent = state.notifyOn ? '🔴 Run Alerts On' : '⚪ Run Alerts Off';
+      btn.classList.toggle('btn-on', state.notifyOn);
+    }
+    if (state.notifyOn && typeof global.Notification === 'function' &&
+      global.Notification.permission === 'default') {
+      global.Notification.requestPermission();
+    }
+  }
+
+  function init() {
+    state.date = parseDate();
+    syncNav();
+    state.soundOn = loadPref('sound', false);
+    state.notifyOn = loadPref('notify', false);
+
+    var soundBtn = $('sound-toggle-btn');
+    if (soundBtn) {
+      soundBtn.textContent = state.soundOn ? '🔊 Sound On' : '🔇 Sound Off';
+      soundBtn.classList.toggle('btn-on', state.soundOn);
+      soundBtn.addEventListener('click', toggleSound);
+    }
+    var notifyBtn = $('notify-toggle-btn');
+    if (notifyBtn) {
+      notifyBtn.textContent = state.notifyOn ? '🔴 Run Alerts On' : '⚪ Run Alerts Off';
+      notifyBtn.classList.toggle('btn-on', state.notifyOn);
+      notifyBtn.addEventListener('click', toggleNotify);
+    }
+    var refreshBtn = $('refresh-btn');
+    if (refreshBtn) refreshBtn.addEventListener('click', function () { scan(); });
+
+    var tabs = $('feed-tabs');
+    if (tabs) {
+      tabs.addEventListener('click', function (evt) {
+        var btn = evt.target.closest('[data-filter]');
+        if (btn) setFilter(btn.getAttribute('data-filter'));
+      });
+    }
+
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) { scan(); }
+    });
+
+    Reviews.loadRegistry();
+
+    FeedLog.load(state.date).then(function (log) {
+      adoptLog(log);
+      render();
+      FeedLog.openStream(state.date);
+      FeedLog.onChange(function (pushed) {
+        if (pushed && pushed.date === state.date) {
+          adoptLog(FeedLog.mergePayloads(state.log, pushed, state.date));
+          render();
+        }
+      });
+      scan();
+    });
+
+    state.timers.sweep = setInterval(sweep, STATUS_SWEEP_MS);
+    state.timers.countdown = setInterval(updateChrome, 200);
+  }
+
+  global.ReplayFeed = {
+    init: init,
+    prevDay: function () { setDate(MLB.shiftISODate(state.date, -1)); },
+    nextDay: function () { setDate(MLB.shiftISODate(state.date, 1)); },
+    today: function () { setDate(MLB.todayISO()); },
+    pickDate: function () { setDate(parseDate()); },
+    setFilter: setFilter,
+    toggleSound: toggleSound,
+    toggleNotify: toggleNotify,
+    scan: scan,
+    state: state,
+    SCAN_MS: SCAN_MS,
+    STATUS_SWEEP_MS: STATUS_SWEEP_MS,
+    FETCH_CONCURRENCY: FETCH_CONCURRENCY,
   };
 
-  document.addEventListener('DOMContentLoaded', function () {
-    state.soundOn = localStorage.getItem('livpbp-sound') === '1';
-    state.notifyOn = localStorage.getItem('livpbp-notify') === '1';
-    function paintToggles() {
-      $('sound-toggle-btn').textContent = state.soundOn ? '🔔 Sound On' : '🔇 Sound Off';
-      $('notify-toggle-btn').textContent = state.notifyOn ? '🔔 Run Alerts On' : '⚪ Run Alerts Off';
-    }
-    paintToggles();
-    $('sound-toggle-btn').addEventListener('click', function () {
-      state.soundOn = !state.soundOn;
-      localStorage.setItem('livpbp-sound', state.soundOn ? '1' : '0');
-      if (state.soundOn) chime();
-      paintToggles();
-    });
-    $('notify-toggle-btn').addEventListener('click', function () {
-      state.notifyOn = !state.notifyOn;
-      if (state.notifyOn && typeof Notification !== 'undefined' && Notification.permission === 'default') Notification.requestPermission();
-      localStorage.setItem('livpbp-notify', state.notifyOn ? '1' : '0');
-      paintToggles();
-    });
-    $('refresh-btn').addEventListener('click', function () { clearTimeout(state.timer); scan(); });
-    setInterval(function () {
-      var left = Math.max(0, Math.round((state.nextPollAt - Date.now()) / 1000));
-      var el = $('countdown'); if (el) el.textContent = state.nextPollAt ? left + 's' : '';
-    }, 500);
-    document.addEventListener('visibilitychange', function () { if (!document.hidden) { clearTimeout(state.timer); scan(); } });
-    var params = new URLSearchParams(window.location.search);
-    var d = params.get('date');
-    window.UI.loadTeams();
-    setDate(/^\d{4}-\d{2}-\d{2}$/.test(d || '') ? d : window.MLBApi.todayStr());
-  });
-})();
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+}(window));

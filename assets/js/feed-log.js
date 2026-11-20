@@ -1,181 +1,314 @@
-/* feed-log.js — persistent feed log (browser + optional server backend).
- * Reconstructed 2026-11-20 to the contract in server.mjs and README.md:
- *  - payload shape {v:1, date, savedAt, entries, order, snapshots,
- *    irregularities, grace, settled} — the exact shape server.mjs merges;
- *  - localStorage: one log per date, newest 7 dates kept, 500 rows max;
- *  - server (when server.mjs is running): GET/POST /api/feed-log?date=… and
- *    the SSE push GET /api/feed-log/stream?date=… . On static hosting
- *    (GitHub Pages) those endpoints do not exist: every server call fails
- *    quietly and the browser log keeps working — never an error banner.
- *  - malformed stored data is dropped with a console warning, never guessed.
- */
-(function () {
+/* ============================================================================
+ * feed-log.js — persistence for everything the Replay Feed tracks
+ *
+ * Two layers, both idempotent:
+ *   1. localStorage  — always available, one log per date, newest 7 dates kept
+ *   2. server store  — optional: POST/GET /api/feed-log (server.mjs), plus a
+ *      server-sent-event stream that pushes other browsers' writes
+ *
+ * On static hosting (GitHub Pages) the API endpoints do not exist: every
+ * request fails quietly and the page keeps working from localStorage alone —
+ * the documented graceful degradation.
+ * ==========================================================================*/
+(function (global) {
   'use strict';
 
-  var KEY_PREFIX = 'livpbp-feed-log-';
-  var MAX_ENTRIES = 500;
+  var KEY_PREFIX = 'mlbp.feedlog.';
+  var INDEX_KEY = 'mlbp.feedlog.index';
   var KEEP_DATES = 7;
+  var MAX_ENTRIES = 500;
+  var WRITE_COALESCE_MS = 1000;
 
-  function blankLog(dateStr) {
-    return { v: 1, date: dateStr, savedAt: Date.now(), entries: [], order: [], snapshots: {}, irregularities: {}, grace: {}, settled: [] };
-  }
-  function isValidShape(x, dateStr) {
-    return !!x && typeof x === 'object' && x.v === 1 && x.date === dateStr && Array.isArray(x.entries);
+  var apiState = { checked: false, available: false, lastError: null };
+  var saveTimers = Object.create(null);
+  var pendingPayloads = Object.create(null);
+  var listeners = [];
+  var stream = null;
+
+  function emptyPayload(date) {
+    return {
+      v: 1,
+      date: date,
+      savedAt: Date.now(),
+      entries: [],
+      order: [],
+      snapshots: {},
+      irregularities: {},
+      grace: {},
+      settled: [],
+    };
   }
 
-  function loadLocal(dateStr) {
+  function storageGet(key) {
+    try { return global.localStorage.getItem(key); } catch (e) { return null; }
+  }
+  function storageSet(key, value) {
+    try { global.localStorage.setItem(key, value); return true; } catch (e) { return false; }
+  }
+
+  function readIndex() {
     try {
-      var raw = localStorage.getItem(KEY_PREFIX + dateStr);
-      if (!raw) return blankLog(dateStr);
-      var parsed = JSON.parse(raw);
-      if (!isValidShape(parsed, dateStr)) {
-        console.warn('[feed-log] malformed stored log for ' + dateStr + ' dropped');
-        return blankLog(dateStr);
-      }
-      parsed.order = Array.isArray(parsed.order) ? parsed.order : [];
-      parsed.snapshots = (parsed.snapshots && typeof parsed.snapshots === 'object') ? parsed.snapshots : {};
-      parsed.irregularities = (parsed.irregularities && typeof parsed.irregularities === 'object') ? parsed.irregularities : {};
-      parsed.grace = (parsed.grace && typeof parsed.grace === 'object') ? parsed.grace : {};
-      parsed.settled = Array.isArray(parsed.settled) ? parsed.settled : [];
-      return parsed;
-    } catch (e) {
-      console.warn('[feed-log] could not read stored log for ' + dateStr, e);
-      return blankLog(dateStr);
-    }
+      var raw = storageGet(INDEX_KEY);
+      var parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) { return []; }
   }
 
-  function pruneOldDates(currentDate) {
-    try {
-      var keys = [];
-      for (var i = 0; i < localStorage.length; i++) {
-        var k = localStorage.key(i);
-        if (k && k.indexOf(KEY_PREFIX) === 0) keys.push(k);
-      }
-      keys.sort(); // date-stamped keys sort chronologically
-      while (keys.length > KEEP_DATES) {
-        var old = keys.shift();
-        if (old !== KEY_PREFIX + currentDate) localStorage.removeItem(old); else break;
-      }
-    } catch (e) { /* storage full/blocked: non-fatal */ }
+  function writeIndex(dates) {
+    var sorted = dates.slice().sort();
+    while (sorted.length > KEEP_DATES) {
+      var drop = sorted.shift();
+      try { global.localStorage.removeItem(KEY_PREFIX + drop); } catch (e) { /* ignore */ }
+    }
+    storageSet(INDEX_KEY, JSON.stringify(sorted));
   }
 
-  function saveLocal(log) {
-    if (!isValidShape(log, log.date)) return log;
-    log.savedAt = Date.now();
-    if (log.entries.length > MAX_ENTRIES) {
-      var keepKeys = {};
-      log.order.slice(-MAX_ENTRIES).forEach(function (k) { keepKeys[k] = 1; });
-      log.entries = log.entries.filter(function (e) { return keepKeys[entryKey(e)]; });
-      log.order = log.order.filter(function (k) { return keepKeys[k]; });
-    }
-    try { localStorage.setItem(KEY_PREFIX + log.date, JSON.stringify(log)); } catch (e) { /* non-fatal */ }
-    pruneOldDates(log.date);
-    return log;
+  function normalize(payload, date) {
+    if (!payload || typeof payload !== 'object') return emptyPayload(date);
+    return {
+      v: 1,
+      date: date,
+      savedAt: Number(payload.savedAt) || Date.now(),
+      entries: Array.isArray(payload.entries) ? payload.entries.filter(Boolean) : [],
+      order: Array.isArray(payload.order) ? payload.order.slice() : [],
+      snapshots: (payload.snapshots && typeof payload.snapshots === 'object') ? payload.snapshots : {},
+      irregularities: (payload.irregularities && typeof payload.irregularities === 'object') ? payload.irregularities : {},
+      grace: (payload.grace && typeof payload.grace === 'object') ? payload.grace : {},
+      settled: Array.isArray(payload.settled) ? payload.settled.slice() : [],
+    };
   }
 
   function entryKey(entry) {
-    if (!entry || !entry.review) return null;
-    return entry.gamePk + ':' + (entry.review.id || entry.review.atBatIndex || '');
-  }
-
-  // Idempotent merge (same rules as server.mjs mergeFeedLogPayloads).
-  function mergeInto(log, incoming) {
-    if (!incoming || incoming.v !== 1 || incoming.date !== log.date) return log;
-    var byKey = {};
-    var order = [];
-    function add(e, preferIncoming) {
-      var k = entryKey(e);
-      if (!k) return;
-      if (!byKey[k]) { byKey[k] = e; order.push(k); return; }
-      if (preferIncoming) {
-        var prev = byKey[k];
-        byKey[k] = {
-          gamePk: e.gamePk || prev.gamePk,
-          review: Object.assign({}, prev.review, e.review),
-          firstSeen: Math.min(prev.firstSeen || e.firstSeen || Date.now(), e.firstSeen || prev.firstSeen || Date.now()),
-          lastSeen: Math.max(prev.lastSeen || 0, e.lastSeen || 0),
-          matchupLabel: e.matchupLabel || prev.matchupLabel || null
-        };
-      }
+    if (!entry) return null;
+    if (entry.id) return String(entry.id);
+    if (entry.review && entry.gamePk !== undefined) {
+      return entry.gamePk + ':' + (entry.review.id || entry.review.atBatIndex || '');
     }
-    log.entries.forEach(function (e) { add(e, false); });
-    (incoming.entries || []).forEach(function (e) { add(e, true); });
-    log.entries = order.map(function (k) { return byKey[k]; });
-    log.order = order;
-    Object.keys(incoming.snapshots || {}).forEach(function (g) {
-      log.snapshots[g] = Object.assign({}, log.snapshots[g] || {}, incoming.snapshots[g] || {});
+    return null;
+  }
+
+  /* Merge two logs without losing rows, baselines or note chains. */
+  function mergePayloads(a, b, date) {
+    var base = normalize(a, date);
+    var add = normalize(b, date);
+    var map = Object.create(null);
+    var order = [];
+
+    function take(entry, preferNew) {
+      var key = entryKey(entry);
+      if (!key) return;
+      var prev = map[key];
+      if (!prev) {
+        map[key] = entry;
+        order.push(key);
+        return;
+      }
+      var merged = Object.assign({}, prev, entry);
+      merged.firstSeen = Math.min(
+        Number(prev.firstSeen) || Number(entry.firstSeen) || Date.now(),
+        Number(entry.firstSeen) || Number(prev.firstSeen) || Date.now()
+      );
+      merged.lastSeen = Math.max(Number(prev.lastSeen) || 0, Number(entry.lastSeen) || 0);
+      if (prev.review && entry.review) merged.review = Object.assign({}, prev.review, entry.review);
+      map[key] = merged;
+    }
+
+    base.entries.forEach(function (e) { take(e, false); });
+    add.entries.forEach(function (e) { take(e, true); });
+
+    /* Bounded, newest-first list. */
+    var mergedEntries = order.map(function (k) { return map[k]; })
+      .sort(function (x, y) { return (Number(y.lastSeen) || 0) - (Number(x.lastSeen) || 0); })
+      .slice(0, MAX_ENTRIES);
+
+    var snapshots = Object.assign({}, base.snapshots);
+    Object.keys(add.snapshots).forEach(function (pk) {
+      snapshots[pk] = Object.assign({}, snapshots[pk] || {}, add.snapshots[pk] || {});
     });
-    Object.keys(incoming.irregularities || {}).forEach(function (g) {
-      var notes = (log.irregularities[g] || []).slice();
-      (incoming.irregularities[g] || []).forEach(function (n) {
-        if (typeof n === 'string' && notes.indexOf(n) < 0) notes.push(n);
+
+    var irregularities = Object.assign({}, base.irregularities);
+    Object.keys(add.irregularities).forEach(function (pk) {
+      var prevNotes = Array.isArray(irregularities[pk]) ? irregularities[pk] : [];
+      var notes = Array.isArray(add.irregularities[pk]) ? add.irregularities[pk] : [];
+      var combined = prevNotes.slice();
+      notes.forEach(function (n) {
+        if (typeof n === 'string' && combined.indexOf(n) === -1) combined.push(n);
       });
-      log.irregularities[g] = notes.slice(-30);
+      irregularities[pk] = combined.slice(-30);
     });
-    log.grace = Object.assign({}, log.grace, incoming.grace || {});
-    var settled = {};
-    (log.settled || []).concat(incoming.settled || []).forEach(function (s) { settled[s] = 1; });
-    log.settled = Object.keys(settled);
-    return log;
+
+    var grace = Object.assign({}, base.grace, add.grace);
+    var settledSet = Object.create(null);
+    base.settled.concat(add.settled).forEach(function (s) { settledSet[s] = true; });
+
+    return {
+      v: 1,
+      date: date,
+      savedAt: Date.now(),
+      entries: mergedEntries,
+      order: mergedEntries.map(entryKey),
+      snapshots: snapshots,
+      irregularities: irregularities,
+      grace: grace,
+      settled: Object.keys(settledSet),
+    };
   }
 
-  function upsert(log, entry) {
-    var k = entryKey(entry);
-    if (!k) return log;
-    var found = false;
-    log.entries = log.entries.map(function (e) {
-      if (entryKey(e) === k) { found = true; return entry; }
-      return e;
-    });
-    if (!found) { log.entries.push(entry); log.order.push(k); }
-    return log;
+  function loadLocal(date) {
+    var raw = storageGet(KEY_PREFIX + date);
+    if (!raw) return null;
+    try {
+      var parsed = JSON.parse(raw);
+      if (!parsed || parsed.v !== 1) return null;
+      return normalize(parsed, date);
+    } catch (e) {
+      global.console && global.console.warn && global.console.warn('[feed-log] dropping malformed local log for ' + date);
+      return null;
+    }
   }
 
-  // ---- optional server backend (server.mjs). Static hosting: silent no-op.
-  var serverState = 'unknown'; // 'available' | 'unavailable'
+  function saveLocal(date, payload) {
+    var ok = storageSet(KEY_PREFIX + date, JSON.stringify(payload));
+    if (ok) {
+      var index = readIndex();
+      if (index.indexOf(date) === -1) index.push(date);
+      writeIndex(index);
+    }
+    return ok;
+  }
+
+  /* --------------------------------------------------------------- server */
+
   function serverFetch(path, opts) {
-    if (serverState === 'unavailable') return Promise.reject(new Error('server unavailable'));
-    return fetch(path, opts).then(function (res) {
-      var ct = res.headers.get('Content-Type') || '';
-      if (!res.ok || ct.indexOf('application/json') < 0) throw new Error('not the feed-log server');
-      serverState = 'available';
-      return res.json();
-    }).catch(function (err) {
-      if (serverState === 'unknown') serverState = 'unavailable';
-      throw err;
+    return fetch(path, Object.assign({ cache: 'no-store', credentials: 'same-origin' }, opts || {}))
+      .then(function (res) {
+        if (!res.ok) {
+          var err = new Error('HTTP ' + res.status);
+          err.status = res.status;
+          throw err;
+        }
+        return res.json();
+      });
+  }
+
+  function loadServer(date) {
+    return serverFetch('/api/feed-log?date=' + encodeURIComponent(date))
+      .then(function (data) {
+        apiState.checked = true;
+        apiState.available = true;
+        return normalize(data, date);
+      })
+      .catch(function (err) {
+        apiState.checked = true;
+        apiState.available = false;
+        apiState.lastError = err;
+        return null;
+      });
+  }
+
+  /* Load = merge(server, local).  Whichever exists wins nothing; both merge. */
+  function load(date) {
+    var local = loadLocal(date);
+    return loadServer(date).then(function (remote) {
+      if (!remote && !local) return emptyPayload(date);
+      if (!remote) return local;
+      if (!local) {
+        saveLocal(date, remote);
+        return remote;
+      }
+      var merged = mergePayloads(remote, local, date);
+      saveLocal(date, merged);
+      return merged;
     });
   }
-  function pullServer(dateStr) {
-    return serverFetch('/api/feed-log?date=' + encodeURIComponent(dateStr)).catch(function () { return null; });
-  }
-  function pushServer(log) {
+
+  function postNow(date) {
+    var payload = pendingPayloads[date];
+    if (!payload) return Promise.resolve(null);
+    pendingPayloads[date] = null;
+    if (apiState.checked && !apiState.available) return Promise.resolve(null);
     return serverFetch('/api/feed-log', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(log)
-    }).catch(function () { return null; });
-  }
-  function subscribe(dateStr, onPayload) {
-    if (typeof EventSource === 'undefined' || serverState === 'unavailable') return null;
-    try {
-      var es = new EventSource('/api/feed-log/stream?date=' + encodeURIComponent(dateStr));
-      es.addEventListener('feed-log', function (ev) {
-        try { onPayload(JSON.parse(ev.data)); } catch (e) { console.warn('[feed-log] bad push payload dropped', e); }
-      });
-      es.onerror = function () { /* browser auto-reconnects; pull fallback covers gaps */ };
-      return es;
-    } catch (e) { return null; }
+      body: JSON.stringify(payload),
+    }).then(function (res) {
+      apiState.available = true;
+      return res;
+    }).catch(function (err) {
+      apiState.available = false;
+      apiState.lastError = err;
+      return null;
+    });
   }
 
-  window.FeedLog = {
-    blankLog: blankLog,
-    loadLocal: loadLocal,
-    saveLocal: saveLocal,
-    mergeInto: mergeInto,
-    upsert: upsert,
+  /* save() is coalesced to at most one write per second per date. */
+  function save(date, payload) {
+    var normalized = normalize(payload, date);
+    saveLocal(date, normalized);
+    pendingPayloads[date] = normalized;
+    if (saveTimers[date]) return;
+    saveTimers[date] = setTimeout(function () {
+      saveTimers[date] = null;
+      postNow(date);
+    }, WRITE_COALESCE_MS);
+  }
+
+  function onChange(fn) {
+    if (typeof fn === 'function') listeners.push(fn);
+  }
+
+  function emit(payload) {
+    listeners.forEach(function (fn) {
+      try { fn(payload); } catch (e) { global.console && global.console.warn && global.console.warn('[feed-log] listener failed', e); }
+    });
+  }
+
+  /* Live push: the server streams every accepted write to open pages.  Absent
+   * on static hosting — the ordinary poll stays the fallback. */
+  function openStream(date) {
+    if (typeof global.EventSource !== 'function') return null;
+    if (apiState.checked && !apiState.available) return null;
+    try {
+      stream = new global.EventSource('/api/feed-log/stream?date=' + encodeURIComponent(date));
+    } catch (e) {
+      return null;
+    }
+    stream.addEventListener('feed-log', function (evt) {
+      try {
+        var payload = JSON.parse(evt.data);
+        apiState.available = true;
+        emit(normalize(payload, date));
+      } catch (e) {
+        global.console && global.console.warn && global.console.warn('[feed-log] ignoring malformed push frame');
+      }
+    });
+    stream.addEventListener('error', function () {
+      /* Browser retries automatically; if the endpoint is missing the stream
+       * simply stays closed and the poll keeps the page current. */
+      apiState.available = false;
+    });
+    return stream;
+  }
+
+  function closeStream() {
+    if (stream) {
+      try { stream.close(); } catch (e) { /* ignore */ }
+      stream = null;
+    }
+  }
+
+  global.FeedLog = {
+    emptyPayload: emptyPayload,
+    normalize: normalize,
+    mergePayloads: mergePayloads,
+    load: load,
+    save: save,
+    onChange: onChange,
+    openStream: openStream,
+    closeStream: closeStream,
     entryKey: entryKey,
-    pullServer: pullServer,
-    pushServer: pushServer,
-    subscribe: subscribe
+    state: apiState,
+    MAX_ENTRIES: MAX_ENTRIES,
+    KEEP_DATES: KEEP_DATES,
   };
-})();
+}(window));
