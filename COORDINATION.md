@@ -407,3 +407,11 @@ Claimed tasks (no other session active; previous sessions' work on `main` @ `5a0
 | F132-6 PR → merge → confirm Pages → tag `v1.0.0-stable-checkpoint` → record here | in progress | repo root |
 
 Merge-conflict note (2026-11-20): rebasing onto `main` @ `9297edc` (PR #12, session `346299e3`) conflicted in `COORDINATION.md` only — both sessions appended at the same spot. Resolved by keeping both entries verbatim; no other session's work discarded. Their `flagged.html`/`scoreboard.js` changes were taken as-is from `main`.
+### 2026-11-20 — f132969c — INTEGRATION DONE
+
+- [PR #13](https://github.com/snapquast73-boop/LIVPBP/pull/13) **MERGED** (merge commit `be2ccb227dcf61ee92ad06b403c03f11ea3e5374`, 2026-11-20T22:37:26Z). Site checks on the PR branch: `test` + `dom-smoke` both **pass**.
+- GitHub Pages deploy for `be2ccb2` confirmed live: `https://snapquast73-boop.github.io/LIVPBP/flagged.html` section 8 (W-1…W-4) and the U-3 "Fixed" note are serving on the deployed site (verified via page fetch, since the REST API was rate-limited by parallel sessions at the time — reset 23:07 UTC). `/` and `/reviews.html` render as before.
+- Tag `v1.0.0-stable-checkpoint` already exists on the remote (points at `5a06fef`, created by a parallel session) — left untouched, so U-5 is resolved and the README revert instruction works. Not moved to `be2ccb2` to avoid rewriting another session's tag.
+- Rebase conflicts during integration were `COORDINATION.md`-only (parallel sessions appending at the same spot: `346299e3`, `8a71f704`, and PRs #14/#16/#18). Each resolved by keeping both entries verbatim; no other session's work discarded. Final task statuses: F132-1…F132-6 all **done**.
+- Remaining flagged items for owner review (unchanged, on `flagged.html`): U-1, U-2, U-6, U-7, U-8, U-9, U-10, U-11, I-8, F-001…F-009. U-3 and U-5 are now Fixed.
+
