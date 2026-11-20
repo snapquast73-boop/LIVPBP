@@ -518,7 +518,10 @@ console.log('\n[3] game.html — header, live module, linescore, PBP, tabs');
     const table = doc.querySelector('#linescore-wrap table.linescore');
     assert(!!table, 'linescore table missing');
     const headers = table.querySelectorAll('thead th');
-    assert(headers.length === 9 + 3 + 1, 'expected 9 inning columns + R/H/E + spacer, got ' + headers.length);
+    assert(headers.length === 9 + 3 + 1 + 1,
+      'expected 9 inning columns + R/H/E + source column + spacer, got ' + headers.length);
+    assert(doc.querySelectorAll('#linescore-wrap td.src-cell a').length === 2,
+      'each linescore row must link to its official source');
   });
 
   await check('play-by-play renders every play with pitch detail', () => {
@@ -542,6 +545,8 @@ console.log('\n[3] game.html — header, live module, linescore, PBP, tabs');
     assert(html.includes('Seattle Mariners'), 'team heading missing');
     assert(html.includes('Test Batter') && html.includes('Test Pitcher'), 'player rows missing');
     assert(html.includes('ERA'), 'pitching header missing');
+    assert(doc.querySelectorAll('#boxscore-wrap td.src-cell a').length >= 2,
+      'each box-score row must link to its official source');
   });
 
   await check('reviews banner appears for the in-progress review', () => {
@@ -687,7 +692,10 @@ console.log('\n[7] static asset integrity');
       try { html = await fs.readFile(path.join(ROOT, page), 'utf8'); }
       catch { throw new Error('page missing'); }
       const refs = [...html.matchAll(/(?:href|src)="([^"]+)"/g)].map((m) => m[1])
-        .filter((u) => !/^(https?:|data:|#|mailto:)/.test(u));
+        /* A JS-constructed URL (404.html writes its <base> at runtime) is not a
+         * static reference; it is covered by the 404 routing check instead. */
+        .filter((u) => !/^(https?:|data:|#|mailto:)/.test(u))
+        .filter((u) => !/[\s'"<]/.test(u));
       assert(refs.length > 0, 'no local assets referenced');
       for (const ref of refs) {
         const clean = ref.split('#')[0].split('?')[0];

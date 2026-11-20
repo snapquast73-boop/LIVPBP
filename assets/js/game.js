@@ -353,6 +353,19 @@
     });
   }
 
+  /* Per-row official source link (restores the parallel session's F-009 request:
+   * every linescore / box-score row says where its numbers came from). */
+  function sourceCell(kind) {
+    var url = 'https://statsapi.mlb.com/api/v1/game/' + state.gamePk + '/' + kind;
+    return '<td class="src-cell"><a href="' + url + '" target="_blank" rel="noopener"' +
+      ' title="Official StatsAPI source for this row">source</a></td>';
+  }
+
+  /* Absent values are shown as a dash and never substituted or guessed. */
+  function orDash(value) {
+    return value === null || value === undefined || value === '' ? '–' : value;
+  }
+
   /* -------------------------------------------------------------- linescore */
 
   function renderLinescore() {
@@ -367,7 +380,7 @@
     var maxInnings = Math.max(9, ls.innings.length);
     var head = '<tr><th></th>';
     for (var i = 1; i <= maxInnings; i += 1) head += '<th>' + i + '</th>';
-    head += '<th>R</th><th>H</th><th>E</th></tr>';
+    head += '<th>R</th><th>H</th><th>E</th><th title="Official source for this row">Src</th></tr>';
 
     function row(team, side) {
       var cells = '';
@@ -381,11 +394,13 @@
         cells +
         '<td class="rhe">' + (team.runs === null ? '–' : team.runs) + '</td>' +
         '<td>' + (team.hits === null ? '–' : team.hits) + '</td>' +
-        '<td>' + (team.errors === null ? '–' : team.errors) + '</td></tr>';
+        '<td>' + (team.errors === null ? '–' : team.errors) + '</td>' + sourceCell('linescore') + '</tr>';
     }
 
     wrap.innerHTML = '<h3>Linescore</h3><table class="linescore"><thead>' + head + '</thead><tbody>' +
-      row(away, 'away') + row(home, 'home') + '</tbody></table>';
+      row(away, 'away') + row(home, 'home') + '</tbody></table>' +
+      '<p class="box-note">“–” means the value is not present in the official payload ' +
+      '(left blank, never substituted). Each row links to its official StatsAPI source.</p>';
   }
 
   /* -------------------------------------------------------------- play-by-play */
@@ -482,26 +497,26 @@
         var s = (p.stats && p.stats.batting) || {};
         return '<tr><td>' + UI.esc(p.person ? p.person.fullName : '') + '</td>' +
           '<td class="pos">' + UI.esc((p.position && p.position.abbreviation) || '') + '</td>' +
-          '<td>' + UI.esc(s.atBats !== undefined ? s.atBats : '-') + '</td>' +
-          '<td>' + UI.esc(s.runs !== undefined ? s.runs : '-') + '</td>' +
-          '<td>' + UI.esc(s.hits !== undefined ? s.hits : '-') + '</td>' +
-          '<td>' + UI.esc(s.rbi !== undefined ? s.rbi : '-') + '</td>' +
-          '<td>' + UI.esc(s.baseOnBalls !== undefined ? s.baseOnBalls : '-') + '</td>' +
-          '<td>' + UI.esc(s.strikeOuts !== undefined ? s.strikeOuts : '-') + '</td>' +
-          '<td>' + MLB.avg3(s.avg) + '</td></tr>';
+          '<td>' + UI.esc(orDash(s.atBats)) + '</td>' +
+          '<td>' + UI.esc(orDash(s.runs)) + '</td>' +
+          '<td>' + UI.esc(orDash(s.hits)) + '</td>' +
+          '<td>' + UI.esc(orDash(s.rbi)) + '</td>' +
+          '<td>' + UI.esc(orDash(s.baseOnBalls)) + '</td>' +
+          '<td>' + UI.esc(orDash(s.strikeOuts)) + '</td>' +
+          '<td>' + MLB.avg3(s.avg) + '</td>' + sourceCell('boxscore') + '</tr>';
       }).join('');
 
       var pitRows = pitchers.map(function (p) {
         var s = (p.stats && p.stats.pitching) || {};
         return '<tr><td>' + UI.esc(p.person ? p.person.fullName : '') + '</td>' +
           '<td class="pos"></td>' +
-          '<td>' + UI.esc(s.inningsPitched !== undefined ? s.inningsPitched : '-') + '</td>' +
-          '<td>' + UI.esc(s.hits !== undefined ? s.hits : '-') + '</td>' +
-          '<td>' + UI.esc(s.runs !== undefined ? s.runs : '-') + '</td>' +
-          '<td>' + UI.esc(s.earnedRuns !== undefined ? s.earnedRuns : '-') + '</td>' +
-          '<td>' + UI.esc(s.baseOnBalls !== undefined ? s.baseOnBalls : '-') + '</td>' +
-          '<td>' + UI.esc(s.strikeOuts !== undefined ? s.strikeOuts : '-') + '</td>' +
-          '<td>' + UI.esc(s.era !== undefined ? s.era : '-') + '</td></tr>';
+          '<td>' + UI.esc(orDash(s.inningsPitched)) + '</td>' +
+          '<td>' + UI.esc(orDash(s.hits)) + '</td>' +
+          '<td>' + UI.esc(orDash(s.runs)) + '</td>' +
+          '<td>' + UI.esc(orDash(s.earnedRuns)) + '</td>' +
+          '<td>' + UI.esc(orDash(s.baseOnBalls)) + '</td>' +
+          '<td>' + UI.esc(orDash(s.strikeOuts)) + '</td>' +
+          '<td>' + UI.esc(orDash(s.era)) + '</td>' + sourceCell('boxscore') + '</tr>';
       }).join('');
 
       var info = (teamBox.info || []).map(function (row) {
@@ -511,10 +526,10 @@
       return '<div><div class="box-team-head">' + UI.teamLogo({ team: { id: team.id, name: team.name } }) +
         UI.esc(team.name) + '</div>' +
         (batRows
-          ? '<table class="box"><thead><tr><th>Batting</th><th>Pos</th><th>AB</th><th>R</th><th>H</th><th>RBI</th><th>BB</th><th>SO</th><th>AVG</th></tr></thead><tbody>' + batRows + '</tbody></table>'
+          ? '<table class="box"><thead><tr><th>Batting</th><th>Pos</th><th>AB</th><th>R</th><th>H</th><th>RBI</th><th>BB</th><th>SO</th><th>AVG</th><th>Src</th></tr></thead><tbody>' + batRows + '</tbody></table>'
           : '<div class="box-note">Batting lines not published yet.</div>') +
         (pitRows
-          ? '<table class="box" style="margin-top:12px"><thead><tr><th>Pitching</th><th></th><th>IP</th><th>H</th><th>R</th><th>ER</th><th>BB</th><th>SO</th><th>ERA</th></tr></thead><tbody>' + pitRows + '</tbody></table>'
+          ? '<table class="box" style="margin-top:12px"><thead><tr><th>Pitching</th><th></th><th>IP</th><th>H</th><th>R</th><th>ER</th><th>BB</th><th>SO</th><th>ERA</th><th>Src</th></tr></thead><tbody>' + pitRows + '</tbody></table>'
           : '') +
         info +
       '</div>';
@@ -776,6 +791,7 @@
     if (state.reviews.length) bits.push(state.reviews.length + ' review event(s)');
     if (state.scoringChanges.length) bits.push(state.scoringChanges.length + ' scoring change(s)');
     bits.push('updated ' + new Date().toLocaleTimeString());
+    bits.push('source: statsapi.mlb.com/api/v1.1/game/' + state.gamePk + '/feed/live');
     return bits.join(' · ');
   }
 

@@ -4,6 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>404 — MLB Live PBP</title>
+  <!-- GitHub Pages serves this file for unmatched paths at any depth, where
+       a plain relative stylesheet/home link would break. Resolve both from
+       the project root (or the server root when run locally). -->
+  <script>document.write('<base href="' + (location.pathname.indexOf('/LIVPBP/') === 0 ? '/LIVPBP/' : '/') + '">');</script>
   <link rel="stylesheet" href="assets/css/style.css">
 </head>
 <body>

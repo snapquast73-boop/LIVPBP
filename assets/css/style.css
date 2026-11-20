@@ -662,6 +662,18 @@ table.linescore td.rhe { font-weight: 700; }
 table.linescore tr.is-batting td { background: rgba(59, 130, 246, .09); }
 table.linescore td.inning-cell { min-width: 22px; }
 
+table.linescore td.src-cell, table.box td.src-cell {
+  font-size: 10.5px;
+  white-space: nowrap;
+  text-align: center;
+  border-left: 1px dashed var(--line-soft);
+}
+table.linescore td.src-cell a, table.box td.src-cell a {
+  color: var(--dim);
+  text-decoration: underline dotted;
+}
+table.linescore td.src-cell a:hover, table.box td.src-cell a:hover { color: var(--accent); }
+
 /* ----------------------------------------------------------- play-by-play */
 .plays-wrap { display: grid; gap: 10px; }
 .inning-divider {
