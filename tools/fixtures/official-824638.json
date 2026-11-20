@@ -1,0 +1,73 @@
+{
+  "_provenance": {
+    "checkedOn": "2026-11-20",
+    "kind": "Manually selected official response excerpts, not a complete feed; omitted fields are deliberately absent. Test-only, never deployed.",
+    "sources": [
+      "https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=2026-08-28&hydrate=probablePitcher,linescore,decisions,review",
+      "https://statsapi.mlb.com/api/v1.1/game/824638/feed/live",
+      "https://statsapi.mlb.com/api/v1/game/824638/playByPlay",
+      "https://statsapi.mlb.com/api/v1/game/824638/boxscore",
+      "https://statsapi.mlb.com/api/v1/gameStatus"
+    ]
+  },
+  "registry": [
+    {"abstractGameState":"Live","codedGameState":"M","detailedState":"Player challenge: Pitch Result","statusCode":"MJ","reason":"Pitch Result","abstractGameCode":"L"},
+    {"abstractGameState":"Live","codedGameState":"M","detailedState":"Manager challenge: Tag play","statusCode":"MA","reason":"Tag play","abstractGameCode":"L"},
+    {"abstractGameState":"Live","codedGameState":"N","detailedState":"Umpire review: Home run","statusCode":"NH","reason":"Home run","abstractGameCode":"L"},
+    {"abstractGameState":"Live","codedGameState":"I","detailedState":"Instant Replay","statusCode":"IH","reason":"Review","abstractGameCode":"L"}
+  ],
+  "schedule": {
+    "dates": [{"date":"2026-08-28","games":[{
+      "gamePk":824638,"season":"2026","gameDate":"2026-08-28T18:20:00Z","officialDate":"2026-08-28",
+      "status":{"abstractGameState":"Final","detailedState":"Final","statusCode":"F"},
+      "teams":{
+        "away":{"team":{"id":113,"name":"Cincinnati Reds"},"leagueRecord":{"wins":64,"losses":71},"score":10,"probablePitcher":{"id":695076,"fullName":"Rhett Lowder"}},
+        "home":{"team":{"id":112,"name":"Chicago Cubs"},"leagueRecord":{"wins":76,"losses":59},"score":8,"probablePitcher":{"id":656849,"fullName":"David Peterson"}}
+      },
+      "venue":{"id":17,"name":"Wrigley Field"},
+      "review":{"away":{"used":0,"remaining":1},"home":{"used":0,"remaining":1}},
+      "decisions":{"winner":{"id":695076,"fullName":"Rhett Lowder"},"loser":{"id":663423,"fullName":"Trent Thornton"},"save":{"id":641941,"fullName":"Emilio Pagán"}}
+    }]}]
+  },
+  "feed": {
+    "gamePk":824638,
+    "gameData":{
+      "game":{"pk":824638,"id":"2026/08/28/cinmlb-chnmlb-1","season":"2026"},
+      "datetime":{"dateTime":"2026-08-28T18:20:00Z","officialDate":"2026-08-28"},
+      "status":{"abstractGameState":"Final","detailedState":"Final","statusCode":"F"},
+      "teams":{"away":{"id":113,"name":"Cincinnati Reds","season":2026,"abbreviation":"CIN"},"home":{"id":112,"name":"Chicago Cubs","season":2026,"abbreviation":"CHC"}},
+      "review":{"away":{"used":0,"remaining":1},"home":{"used":0,"remaining":1}},
+      "absChallenges":{"away":{"usedSuccessful":3,"usedFailed":0,"remaining":2},"home":{"usedSuccessful":5,"usedFailed":0,"remaining":2}},
+      "venue":{"id":17,"name":"Wrigley Field"},
+      "weather":{"condition":"Sunny","temp":"77","wind":"6 mph, R To L"}
+    },
+    "liveData":{
+      "linescore":{
+        "currentInning":9,"currentInningOrdinal":"9th","inningState":"Bottom","isTopInning":false,"balls":1,"strikes":1,"outs":3,
+        "teams":{"away":{"runs":10,"hits":13,"errors":0},"home":{"runs":8,"hits":13,"errors":2}},
+        "innings":[
+          {"num":1,"away":{"runs":0,"hits":1,"errors":0},"home":{"runs":1,"hits":2,"errors":0}},
+          {"num":2,"away":{"runs":0,"hits":1,"errors":0},"home":{"runs":0,"hits":1,"errors":0}},
+          {"num":3,"away":{"runs":0,"hits":1,"errors":0},"home":{"runs":2,"hits":2,"errors":1}},
+          {"num":4,"away":{"runs":1,"hits":2,"errors":0},"home":{"runs":0,"hits":1,"errors":0}},
+          {"num":5,"away":{"runs":1,"hits":1,"errors":0},"home":{"runs":0,"hits":0,"errors":0}},
+          {"num":6,"away":{"runs":5,"hits":4,"errors":0},"home":{"runs":0,"hits":0,"errors":0}},
+          {"num":7,"away":{"runs":2,"hits":2,"errors":0},"home":{"runs":1,"hits":2,"errors":1}},
+          {"num":8,"away":{"runs":0,"hits":0,"errors":0},"home":{"runs":4,"hits":5,"errors":0}},
+          {"num":9,"away":{"runs":1,"hits":1,"errors":0},"home":{"runs":0,"hits":0,"errors":0}}
+        ]
+      },
+      "plays":{
+        "allPlays":[
+          {"atBatIndex":8,"about":{"atBatIndex":8,"inning":1,"halfInning":"bottom","hasReview":false},"result":{"event":"Double","eventType":"double","description":"Alex Bregman doubles (25) on a line drive to right fielder Héctor Rodríguez. Seiya Suzuki scores.","awayScore":0,"homeScore":1},"matchup":{"batter":{"id":608324,"fullName":"Alex Bregman"},"pitcher":{"id":695076,"fullName":"Rhett Lowder"}},"playEvents":[{"index":0,"details":{"description":"Called Strike","code":"C","hasReview":false}},{"index":1,"details":{"description":"Called Strike","code":"C","hasReview":true},"reviewDetails":{"isOverturned":true,"inProgress":false,"reviewType":"MJ","challengeTeamId":113}}]}
+        ],
+        "currentPlay":{"atBatIndex":87,"about":{"atBatIndex":87,"inning":9,"halfInning":"bottom","isComplete":true},"result":{"event":"Flyout","eventType":"field_out","description":"Nico Hoerner flies out to left fielder TJ Friedl.","awayScore":10,"homeScore":8},"count":{"balls":1,"strikes":1,"outs":3},"matchup":{"batter":{"id":663538,"fullName":"Nico Hoerner"},"pitcher":{"id":641941,"fullName":"Emilio Pagán"}}}
+      },
+      "boxscore":{"teams":{"away":{"team":{"id":113,"name":"Cincinnati Reds"},"batters":[667472,682829,701398,663886,553993,668709,680574,624431,699302,670770,695076,682825,656271,622088,594580,641941],"pitchers":[695076,682825,656271,622088,594580,641941],"players":{
+        "ID682829":{"person":{"id":682829,"fullName":"Elly De La Cruz"},"stats":{"batting":{"runs":1,"strikeOuts":1,"baseOnBalls":0,"hits":3,"atBats":5,"rbi":2}},"seasonStats":{"batting":{"runs":78,"strikeOuts":141,"baseOnBalls":54,"hits":124,"avg":".268","atBats":462,"rbi":60}}},
+        "ID667472":{"person":{"id":667472,"fullName":"Dane Myers"},"stats":{"batting":{"runs":0,"strikeOuts":0,"baseOnBalls":1,"hits":0,"atBats":5,"rbi":0}}},
+        "ID695076":{"person":{"id":695076,"fullName":"Rhett Lowder"},"stats":{"pitching":{"runs":3,"strikeOuts":5,"baseOnBalls":0,"hits":6,"atBats":21,"numberOfPitches":96,"inningsPitched":"5.0","earnedRuns":3,"rbi":3}}}
+      }}}}
+    }
+  }
+}

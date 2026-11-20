@@ -150,7 +150,8 @@
         description: play.result?.description ?? null, rbi: play.result?.rbi ?? null,
         awayScore: play.result?.awayScore ?? null, homeScore: play.result?.homeScore ?? null };
       const old = previousSnapshots[index];
-      if (old && old.eventType && snapshot.eventType && (old.eventType !== snapshot.eventType || old.isOut !== snapshot.isOut)) {
+      const knownOutChange = typeof old?.isOut === 'boolean' && typeof snapshot.isOut === 'boolean' && old.isOut !== snapshot.isOut;
+      if (old && old.eventType && snapshot.eventType && (old.eventType !== snapshot.eventType || knownOutChange)) {
         const id = `${index}:scoring-change`;
         const priorChange = byId.get(`${gamePk}:${id}`)?.review;
         add({ id, typeKey: 'scoring', typeLabel: 'Observed scoring change', atBatIndex: index,
