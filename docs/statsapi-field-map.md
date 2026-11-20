@@ -82,7 +82,7 @@ actually render with no uncaught error.
 | Team logo URL `https://www.mlbstatic.com/team-logos/team-cap-on-dark/{id}.svg` | **Unverified** | the image host answers the page-fetch channel with HTTP 500 (binary asset it cannot render), so existence could not be confirmed; the pattern is the one documented in `README.md`, and `<img onerror>` hides a broken logo | [`README.md`](../README.md) (endpoint table) |
 | Player headshot URL | **Unverified** | `README.md` only shows a truncated path (`…/v1/people/{playerId}/headshot/67/current`); the host could not be reached from this environment | [`README.md`](../README.md) (endpoint table) |
 | Original client source, `docs/`, `tools/` and tag `v1.0.0-stable-checkpoint` | **Missing** | never uploaded; upstream repo is 404 | [`/repos/buffedlizard55-lab/MLB-Live-PBP`](https://api.github.com/repos/buffedlizard55-lab/MLB-Live-PBP) |
-| Poll cadence, full hit-model drivers, Before/Possible/Actual score tracker | **Deviation** | re-implemented conservatively; see F-005, F-006, F-007 on `flagged.html` | this report, §3 |
+| Poll cadence, hit-model drivers, Before/Possible/Actual score tracker | **Resolved in the published build** | the merged build keeps the documented cadences (500 ms live / 250 ms in-review / 125 ms status sweep), all six forecast drivers, and the three-row score tracker; the model's own constants remain flagged as U-2/U-9 on `flagged.html` | `assets/js/{scoreboard,reviews-feed,game,props}.js` · `flagged.html` rows R-2/R-3 |
 
 Nothing above was filled in by inference: the app shows "—" or omits the value when the payload does
 not carry it.

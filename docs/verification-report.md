@@ -90,6 +90,12 @@ is stubbed, with payloads matching the shapes in §3). 40 assertions, all passin
    query offers the most recent date that did have games.
 9. **Parallel session's checker** — `node tools/restoration-check.mjs` (kept from the earlier
    restoration) also passes: local references, JS syntax, and the `server.mjs` API contract.
+10. **Third-party cross-check** — session `7e3aaa61` added `tests/` with payloads captured verbatim
+    from the live StatsAPI (`tests/fixtures/feed-824638-review.json`, `gamestatus.json`,
+    `schedule-2026-08-28.json`). Running their independent suite against this implementation
+    (`node tests/run-all.mjs`) gives **37 jsdom checks passed**, link-check OK (39 local refs),
+    contract-check OK (8 bindings across 5 pages) and syntax OK — a second, separately written
+    verification of the same pages.
 
 ## 5. Flagged for review (see `flagged.html` for the rendered table)
 
@@ -106,4 +112,4 @@ is stubbed, with payloads matching the shapes in §3). 40 assertions, all passin
 | U-9 | Remaining-PA estimate for the `≥1 hit` projection | estimate, not an official figure |
 | U-10 | 500/250/125 ms polling cadence | the StatsAPI publishes no rate limit; cadence is a judgement call |
 | U-11 | Shared Feed Log across browsers | Pages is static; sharing needs `node server.mjs` |
-| I-8 | “Confirmed” outcome | payload has only `isOverturned`, so “stands” vs “confirmed” is indistinguishable |
+| I-8 | “Confirmed” outcome | structured payload has only `isOverturned`, so “stands” vs “confirmed” is indistinguishable; MLB's free-text description (which may say “confirmed”) is displayed verbatim, and the outcome chip never infers one |

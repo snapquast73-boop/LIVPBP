@@ -201,6 +201,7 @@ linked; unverified values are left blank and flagged, not inferred.
 | Live site | https://snapquast73-boop.github.io/LIVPBP/ · `/flagged.html` · `/assets/js/*.js` all serving the rebuilt files |
 | Follow-up PR | [#9](https://github.com/snapquast73-boop/LIVPBP/pull/9) — **MERGED** (`395905c4c7f6b9da7c537761f9924a2c89a94422`), corrected the published check counts; Pages build `built` |
 | Final `main` state | site checks run 44829042200 → **success**; Pages build for `395905c` → `status: "built"` (78 s) |
+| Independent cross-check | session `7e3aaa61`'s suite (`node tests/run-all.mjs`, 3 captured real payloads) run against this implementation: **37 jsdom checks passed**, link-check OK (39 refs), contract-check OK, syntax OK |
 | Test suites | `npm test` → 40 passed, 0 failed · `node tools/restoration-check.mjs` → ALL CHECKS PASSED |
 | Flagged items | `flagged.html` (U-1…U-11, I-8, plus the preserved F-001…F-009 and R-1…R-4) |
 
@@ -254,18 +255,77 @@ send a pull request that edits the specific function and keeps `npm test` (40 ch
   (`global.X` publication pattern now recognised) · jsdom render **37/37** · `tools/smoke-test.mjs`
   and `tools/restoration-check.mjs` pass. PR: see the link recorded below after merge.
 
+## Session 346299e3 — published-site delivery check
+
+- **In progress**, owner `346299e3`, fixed branch `arena/346299e3-livpbp`. Scope: `tests/pages-delivery.mjs`, `.github/workflows/pages-delivery.yml`, this board entry. Check the actual Pages artifact against the deployed revision, independent of fixture tests. Existing client, data, flag-page and integration claims on other branches are left alone. [GitHub Pages configuration](https://api.github.com/repos/snapquast73-boop/LIVPBP/pages) and [deployment history](https://github.com/snapquast73-boop/LIVPBP/deployments/github-pages).
+
+### Session `8a71f704` — supplied reference-site comparison
+
+| Task | Status | Session | File scope |
+|---|---|---|---|
+| Compare the two user-supplied references with the merged replay feed, and record testable parity gaps and deployment evidence | needs review | `8a71f704` (`arena/8a71f704-livpbp`) | `audit/reference-replay-comparison.md`, this entry only |
+
+Prior integration PRs have already merged. Active claims on sibling branches (in particular `1f908513`) reserve site/verification changes and further integration. This session does not replace shared assets, public navigation, or Pages settings. Report any requested fixes here for the respective owner. Arena fixes the session branch name.
+
+**Status update — needs review (`8a71f704`):** [Reference replay comparison and sources](audit/reference-replay-comparison.md) complete. GitHub reports [PR #7 Pages deployment successful](https://github.com/snapquast73-boop/LIVPBP/actions/runs/44829312831) and [PR #11 build successful](https://api.github.com/repos/snapquast73-boop/LIVPBP/pages/builds/1388345095). Site checks and the fixture-based suites passed; the smoke harness logged a scoreboard readiness warning (RR-06). Requests to the frontend/integration owners: guard in-flight results when navigating dates (RR-01), use MLB's pitch number instead of array position (RR-02), surface scoring changes in All (RR-03), add direct official replay links (RR-04), and link this comparison from the public Flagged for Review page. The supplied sites do not agree on all filters and alerts; exact original parity is unverified (RR-03/RR-05). No shared site code or settings changed in this audit.
+
+Audit-only pull request: [#17 — status, checks, and merge result](https://github.com/snapquast73-boop/LIVPBP/pull/17). [Integration handoff on issue #1](https://github.com/snapquast73-boop/LIVPBP/issues/1#issuecomment-7052222793).
+
+Rebase note: PR #12 appended its separate Pages delivery-check claim to the same board location. Preserved both entries when rebasing the audit branch; no application-file conflicts occurred.
+
+### 2026-11-20 — 7e3aaa61 — published (merge + deployment record)
+
+- **PR:** [#7 — Fix the game-page team header (flat feed/live shape) and publish the independent
+  verification record](https://github.com/snapquast73-boop/LIVPBP/pull/7)
+- **Merged to `main`:** 2026-11-20T22:29:00Z by `gh pr merge 7 --merge`;
+  merge commit `5a06fefdf53b2b034b02da3f5d93a26ec301aac8`.
+- **Checks before merge:** workflow `Site checks` — `test` and `dom-smoke` both **pass**
+  (run 44829071766). Local: `tests/run-all.mjs` 4/4 groups, jsdom render 37/37,
+  `tools/smoke-test.mjs` 40/40, `tools/restoration-check.mjs` all checks.
+- **GitHub Pages:** build for `5a06fef` reached status **`built`**
+  (`https://api.github.com/repos/snapquast73-boop/LIVPBP/pages/builds/1388342052`). Live site verified
+  afterwards: `/flagged.html` serves sections 1–8 including this session's V-rows, and
+  `/assets/js/game.js` on the live host contains the `teamNode()` fix, i.e. the deployed code is the
+  reviewed code.
+- **Tag:** `v1.0.0-stable-checkpoint` created on `5a06fef` (annotated), which makes the README's
+  `git reset --hard v1.0.0-stable-checkpoint` instruction work (resolves flagged U-5).
+- **Corrections to the published page after the merge of PR #6** (claims that had gone stale):
+  the preserved F-005/F-006/F-007 rows are now introduced as describing the earlier build and are
+  answered by the R-2/R-3 status rows (the current build keeps 500 ms / 250 ms / 125 ms cadences, all
+  six forecast drivers and the three-row score tracker — re-checked in the merged sources); the
+  mangled link label in R-3 (`people/<built-in function id>/stats`) is fixed to `people/660271/stats`;
+  U-5 is marked resolved; `docs/statsapi-field-map.md` no longer calls those behaviours deviations.
+- **Nothing is claimed that was not checked.** Items that remain unverifiable from this environment
+  are marked as such on `flagged.html` §7 (V-7).
+## Session 346299e3 — published-site delivery check
+
+- **In progress**, owner `346299e3`, fixed branch `arena/346299e3-livpbp`. Scope: `tests/pages-delivery.mjs`, `.github/workflows/pages-delivery.yml`, this board entry. Check the actual Pages artifact against the deployed revision, independent of fixture tests. Existing client, data, flag-page and integration claims on other branches are left alone. [GitHub Pages configuration](https://api.github.com/repos/snapquast73-boop/LIVPBP/pages) and [deployment history](https://github.com/snapquast73-boop/LIVPBP/deployments/github-pages).
+### Session `8a71f704` — supplied reference-site comparison
+
+| Task | Status | Session | File scope |
+|---|---|---|---|
+| Compare the two user-supplied references with the merged replay feed, and record testable parity gaps and deployment evidence | needs review | `8a71f704` (`arena/8a71f704-livpbp`) | `audit/reference-replay-comparison.md`, this entry only |
+
+Prior integration PRs have already merged. Active claims on sibling branches (in particular `1f908513`) reserve site/verification changes and further integration. This session does not replace shared assets, public navigation, or Pages settings. Report any requested fixes here for the respective owner. Arena fixes the session branch name.
+
+**Status update — needs review (`8a71f704`):** [Reference replay comparison and sources](audit/reference-replay-comparison.md) complete. GitHub reports [PR #7 Pages deployment successful](https://github.com/snapquast73-boop/LIVPBP/actions/runs/44829312831) and [PR #11 build successful](https://api.github.com/repos/snapquast73-boop/LIVPBP/pages/builds/1388345095). Site checks and the fixture-based suites passed; the smoke harness logged a scoreboard readiness warning (RR-06). Requests to the frontend/integration owners: guard in-flight results when navigating dates (RR-01), use MLB's pitch number instead of array position (RR-02), surface scoring changes in All (RR-03), add direct official replay links (RR-04), and link this comparison from the public Flagged for Review page. The supplied sites do not agree on all filters and alerts; exact original parity is unverified (RR-03/RR-05). No shared site code or settings changed in this audit.
+
+Audit-only pull request: [#17 — status, checks, and merge result](https://github.com/snapquast73-boop/LIVPBP/pull/17). [Integration handoff on issue #1](https://github.com/snapquast73-boop/LIVPBP/issues/1#issuecomment-7052222793).
+
+Rebase note: PR #12 appended its separate Pages delivery-check claim to the same board location. Preserved both entries when rebasing the audit branch; no application-file conflicts occurred.
+
 ---
 
-# Session `arena/1f908513-livpbp` — Open `server.mjs` Fix & Final Live-StatsAPI Integration Re-Verification
+# Session `arena/1f908513-livpbp` — Open `server.mjs` Fix, Live-StatsAPI Fixes & Replay Audit (`RR-01`–`RR-06`) Integration
 
 - **Session ID:** `1f908513` (branch fixed by Arena to `arena/1f908513-livpbp`, branched from `aef1a74`).
-- **Merge conflict resolution log (2026-11-20 UTC):** Merged `origin/main` (`5a06fef`, incorporating PRs #3–#10 from sessions `681bfa13`, `f8d351d0`, `f7276bda`, and `7e3aaa61`). Conflict occurred only on `COORDINATION.md` and was resolved by preserving 100% of `origin/main`'s board, notes, and merged files verbatim. Respecting `7e3aaa61`'s `README.md` note on F-003 (not recreating the unuploaded private `tools/*.mjs` notes) and `f7276bda`'s ownership guidance (targeted function-level bug fixes only, extending tests and verification records without truncating any prior session's work).
+- **Merge conflict resolution log (2026-11-20 UTC):** Merged `origin/main` (`6a5243b`, incorporating PRs #3–#17 from sessions `681bfa13`, `f8d351d0`, `f7276bda`, `7e3aaa61`, `346299e3`, and `8a71f704`). Conflict occurred only on `COORDINATION.md` and was resolved by preserving 100% of `origin/main`'s board and files verbatim, then recording this session's targeted scope and accepting session `8a71f704`'s integration handoff (`audit/reference-replay-comparison.md`, items `RR-01`–`RR-06`).
 
 ## Task Board (`arena/1f908513-livpbp`)
 
 | Task ID | Task Description | Status | Owning Session | File Scope |
 | --- | --- | --- | --- | --- |
 | `S1f-1` | Resolve open item `A6` in `server.mjs` (`decodeURIComponent` `URIError` HTTP 400 guard + strict `REPO_DIR + path.sep` sibling-directory containment check) | `done` | `arena/1f908513-livpbp` | `server.mjs` |
-| `S1f-2` | Targeted live-StatsAPI fixes in `props.js`, `game.js`, and `reviews.js`: (a) `expectedStatistics` uses `stat.avg` for xBA on live StatsAPI (`682829`, `656849`), (b) `vsPlayer` returns `vsPlayerTotal`/`vsPlayer` blocks rather than `season`, plus combined `!split.team` row preference on multi-team players, (c) `game.js` `seasonLine()` fallback to `liveData.boxscore.teams.<side>.players.ID<id>.seasonStats`, (d) `reviews.js` `MF` fallback reason, `events[last].index` matching in `runsForEvent`, and PA-ending `MJ` pitch counts (`823424` play 36, `824638` plays 72 & 86) | `in progress` | `arena/1f908513-livpbp` | `assets/js/props.js`, `assets/js/game.js`, `assets/js/reviews.js` |
-| `S1f-3` | Extend `flagged.html`, `docs/statsapi-field-map.md`, and `docs/verification-report.md` (without truncating prior rows): fix `<built-in function id>` HTML defect in `R-3`, ensure every single table row has a clickable official `https://` source link and blank value cells on unverified items, and append Session `1f908513` live-API audit findings | `in progress` | `arena/1f908513-livpbp` | `flagged.html`, `docs/statsapi-field-map.md`, `docs/verification-report.md` |
-| `S1f-4` | Extend `tools/smoke-test.mjs` and `tests/jsdom-render-test.mjs` with regression checks for `expectedStatistics.avg`, `vsPlayerTotal`, `boxscore.seasonStats`, PA-ending `MJ`, `MF`, and `server.mjs` `A6`; run all suites + CI + Pages verification | `in progress` | `arena/1f908513-livpbp` | `tools/smoke-test.mjs`, `tests/jsdom-render-test.mjs`, `COORDINATION.md` |
+| `S1f-2` | Targeted live-StatsAPI fixes in `props.js`, `game.js`, and `reviews.js`: `expectedStatistics` `stat.avg` xBA, `vsPlayerTotal`/`vsPlayer` H2H, combined `!split.team` rows, `remainingPAs` multi-PA floor, `boxscore` `seasonStats` fallback, `MF` fallback reason, `events[last].index` matching, and PA-ending `MJ` pitch counts | `done` | `arena/1f908513-livpbp` | `assets/js/props.js`, `assets/js/game.js`, `assets/js/reviews.js` |
+| `S1f-3` | Address `8a71f704` integration handoff (`RR-01`–`RR-06`): date-generation token + `officialDate` check in `reviews-feed.js` (`RR-01`), official `pitchNumber` projection & lookup (`RR-02`), `scoring_change` visibility in `All` (`RR-03`), per-row direct official MLB StatsAPI source links on replay cards (`RR-04`), document `RR-05` unverified audio difference, and wait for script readiness + assert zero `jsdomError`s in `tools/smoke-test.mjs` (`RR-06`) | `in progress` | `arena/1f908513-livpbp` | `assets/js/reviews-feed.js`, `assets/js/reviews.js`, `assets/js/game.js`, `tools/smoke-test.mjs` |
+| `S1f-4` | Extend `flagged.html`, `docs/statsapi-field-map.md`, `docs/verification-report.md`, and `tests/jsdom-render-test.mjs` (never truncating prior rows): ensure every single table row has an official `https://` source link and blank value cells on unverified items, link `audit/reference-replay-comparison.md`, and add regression tests for all `S1f-1`–`S1f-3` fixes | `in progress` | `arena/1f908513-livpbp` | `flagged.html`, `docs/statsapi-field-map.md`, `docs/verification-report.md`, `tests/jsdom-render-test.mjs`, `COORDINATION.md` |
