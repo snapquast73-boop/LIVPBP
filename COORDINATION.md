@@ -201,6 +201,7 @@ linked; unverified values are left blank and flagged, not inferred.
 | Live site | https://snapquast73-boop.github.io/LIVPBP/ · `/flagged.html` · `/assets/js/*.js` all serving the rebuilt files |
 | Follow-up PR | [#9](https://github.com/snapquast73-boop/LIVPBP/pull/9) — **MERGED** (`395905c4c7f6b9da7c537761f9924a2c89a94422`), corrected the published check counts; Pages build `built` |
 | Final `main` state | site checks run 44829042200 → **success**; Pages build for `395905c` → `status: "built"` (78 s) |
+| Independent cross-check | session `7e3aaa61`'s suite (`node tests/run-all.mjs`, 3 captured real payloads) run against this implementation: **37 jsdom checks passed**, link-check OK (39 refs), contract-check OK, syntax OK |
 | Test suites | `npm test` → 40 passed, 0 failed · `node tools/restoration-check.mjs` → ALL CHECKS PASSED |
 | Flagged items | `flagged.html` (U-1…U-11, I-8, plus the preserved F-001…F-009 and R-1…R-4) |
 
