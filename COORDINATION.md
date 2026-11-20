@@ -253,3 +253,28 @@ send a pull request that edits the specific function and keeps `npm test` (40 ch
 - Harness results on the merged tree: syntax OK · link-check 39 refs OK · contract-check OK
   (`global.X` publication pattern now recognised) · jsdom render **37/37** · `tools/smoke-test.mjs`
   and `tools/restoration-check.mjs` pass. PR: see the link recorded below after merge.
+
+### 2026-11-20 — 7e3aaa61 — published (merge + deployment record)
+
+- **PR:** [#7 — Fix the game-page team header (flat feed/live shape) and publish the independent
+  verification record](https://github.com/snapquast73-boop/LIVPBP/pull/7)
+- **Merged to `main`:** 2026-11-20T22:29:00Z by `gh pr merge 7 --merge`;
+  merge commit `5a06fefdf53b2b034b02da3f5d93a26ec301aac8`.
+- **Checks before merge:** workflow `Site checks` — `test` and `dom-smoke` both **pass**
+  (run 44829071766). Local: `tests/run-all.mjs` 4/4 groups, jsdom render 37/37,
+  `tools/smoke-test.mjs` 40/40, `tools/restoration-check.mjs` all checks.
+- **GitHub Pages:** build for `5a06fef` reached status **`built`**
+  (`https://api.github.com/repos/snapquast73-boop/LIVPBP/pages/builds/1388342052`). Live site verified
+  afterwards: `/flagged.html` serves sections 1–8 including this session's V-rows, and
+  `/assets/js/game.js` on the live host contains the `teamNode()` fix, i.e. the deployed code is the
+  reviewed code.
+- **Tag:** `v1.0.0-stable-checkpoint` created on `5a06fef` (annotated), which makes the README's
+  `git reset --hard v1.0.0-stable-checkpoint` instruction work (resolves flagged U-5).
+- **Corrections to the published page after the merge of PR #6** (claims that had gone stale):
+  the preserved F-005/F-006/F-007 rows are now introduced as describing the earlier build and are
+  answered by the R-2/R-3 status rows (the current build keeps 500 ms / 250 ms / 125 ms cadences, all
+  six forecast drivers and the three-row score tracker — re-checked in the merged sources); the
+  mangled link label in R-3 (`people/<built-in function id>/stats`) is fixed to `people/660271/stats`;
+  U-5 is marked resolved; `docs/statsapi-field-map.md` no longer calls those behaviours deviations.
+- **Nothing is claimed that was not checked.** Items that remain unverifiable from this environment
+  are marked as such on `flagged.html` §7 (V-7).
