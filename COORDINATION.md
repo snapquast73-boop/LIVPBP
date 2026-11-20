@@ -258,3 +258,11 @@ send a pull request that edits the specific function and keeps `npm test` (40 ch
 ## Session 346299e3 — published-site delivery check
 
 - **In progress**, owner `346299e3`, fixed branch `arena/346299e3-livpbp`. Scope: `tests/pages-delivery.mjs`, `.github/workflows/pages-delivery.yml`, this board entry. Check the actual Pages artifact against the deployed revision, independent of fixture tests. Existing client, data, flag-page and integration claims on other branches are left alone. [GitHub Pages configuration](https://api.github.com/repos/snapquast73-boop/LIVPBP/pages) and [deployment history](https://github.com/snapquast73-boop/LIVPBP/deployments/github-pages).
+
+### Session `8a71f704` — supplied reference-site comparison
+
+| Task | Status | Session | File scope |
+|---|---|---|---|
+| Compare the two user-supplied references with the merged replay feed, and record testable parity gaps and deployment evidence | in progress | `8a71f704` (`arena/8a71f704-livpbp`) | `audit/reference-replay-comparison.md`, this entry only |
+
+Prior integration PRs have already merged. Active claims on sibling branches (in particular `1f908513`) reserve site/verification changes and further integration. This session does not replace shared assets, public navigation, or Pages settings. Report any requested fixes here for the respective owner. Arena fixes the session branch name.
