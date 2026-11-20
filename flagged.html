@@ -176,9 +176,9 @@
         </tr>
         <tr>
           <td>I-8</td>
-          <td class="wrap">The Feed Log's <em>“Confirmed”</em> outcome cannot be reproduced from the payload: <code>reviewDetails</code> only carries a boolean <code>isOverturned</code>, so “call stands” and “call confirmed” are indistinguishable.</td>
-          <td class="wrap">T-4 payload; no <code>confirmed</code> field in the review objects.</td>
-          <td class="wrap">The UI reports “Stands” / “Overturned” / “Under review” only; it never claims “Confirmed”. Flagged U-2.</td>
+          <td class="wrap">The structured <em>“Confirmed”</em> outcome cannot be reproduced from the payload: <code>reviewDetails</code> only carries a boolean <code>isOverturned</code>, so a call that stands and a call that is confirmed are indistinguishable <strong>in the structured fields</strong>. MLB's own free-text description may say “call on the field was confirmed” (observed live on game 824466), and that text is shown verbatim.</td>
+          <td class="wrap">T-4 payload plus the live description on <a href="https://statsapi.mlb.com/api/v1.1/game/824466/feed/live" target="_blank" rel="noopener">game 824466 feed/live</a>; no <code>confirmed</code> field exists in <code>reviewDetails</code>.</td>
+          <td class="wrap">Outcome chips say “Stands” / “Overturned” / “Under review” only (never an inferred “Confirmed”); the official play description is rendered as-is, including any “confirmed” wording from MLB. Flagged U-2.</td>
         </tr>
       </tbody>
     </table>

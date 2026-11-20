@@ -112,4 +112,4 @@ is stubbed, with payloads matching the shapes in §3). 40 assertions, all passin
 | U-9 | Remaining-PA estimate for the `≥1 hit` projection | estimate, not an official figure |
 | U-10 | 500/250/125 ms polling cadence | the StatsAPI publishes no rate limit; cadence is a judgement call |
 | U-11 | Shared Feed Log across browsers | Pages is static; sharing needs `node server.mjs` |
-| I-8 | “Confirmed” outcome | payload has only `isOverturned`, so “stands” vs “confirmed” is indistinguishable |
+| I-8 | “Confirmed” outcome | structured payload has only `isOverturned`, so “stands” vs “confirmed” is indistinguishable; MLB's free-text description (which may say “confirmed”) is displayed verbatim, and the outcome chip never infers one |
