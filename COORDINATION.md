@@ -1,22 +1,231 @@
-# COORDINATION.md — Shared Task Board (`snapquast73-boop/LIVPBP`)
+# COORDINATION.md — shared task board
 
-> **Branch note:** In Arena Agent Mode, this session's branch name is fixed by the platform to `arena/1f908513-livpbp` (Session ID: `1f908513`). All commits and pushes from this session target `arena/1f908513-livpbp`, with integration to `main` performed via Pull Request after re-checking `origin/main`.
+Repo: `snapquast73-boop/LIVPBP` · Site: https://snapquast73-boop.github.io/LIVPBP/
+Updated 2026-11-20 by session **`arena-f7276bda`** (branch `arena/f7276bda-livpbp`).
 
-## 1. Repository Audit Summary (Initial State at `aef1a74c40143a7fff9d24853418002e008b79b1`)
+> **Sessions working this repo.** Three agent sessions restored this site on 2026-11-20:
+> `f8d351d0`, `681bfa13` (whose work is on `main` and preserved below, unedited) and
+> `arena-f7276bda` (this board, PR #6). This board is the merged board: the first two
+> sections are this session's audit and task board, section "Preserved board" is the
+> previous board reproduced verbatim, and the merge record at the end explains exactly
+> how the two sets of files were combined without discarding anyone's work.
 
-Commit `aef1a74c40143a7fff9d24853418002e008b79b1` (`Add files via upload`) uploaded only the 8 root-level files (`.gitignore`, `404.html`, `LICENSE`, `README.md`, `game.html`, `index.html`, `reviews.html`, `server.mjs`) from the original project (`buffedlizard55-lab/MLB-Live-PBP`), omitting all subdirectories (`assets/css/`, `assets/js/`, `docs/`, `tools/`). As a result, GitHub Pages (`https://snapquast73-boop.github.io/LIVPBP/`) currently serves unstyled HTML shells whose `<link rel="stylesheet">` and `<script src="assets/js/...">` tags all return HTTP 404.
+## Branch / worktree note (Arena sandbox restriction)
 
-## 2. Shared Task Board
+Arena fixes each session to one branch and forbids creating or pushing to any other, so
+the brief's `session-<id>/<task>` branch rule cannot be followed literally. This session's
+work lives on **`arena/f7276bda-livpbp`** (from `main` @ `aef1a74`); integration is a pull
+request from that branch into `main`. Previous sessions logged the same deviation as F-001.
+
+---
+
+## Repository audit (2026-11-20) — why the site was not working
+
+Base commit `aef1a74` ("Add files via upload") contained only:
+
+```
+.gitignore  404.html  LICENSE  README.md  game.html  index.html  reviews.html  server.mjs
+```
+
+| # | Irregularity | Evidence | Impact |
+|---|---|---|---|
+| A1 | Entire `assets/` tree missing (style.css + 8 JS files) | `index.html` L21/L57-61, `game.html` L24/L90-96, `reviews.html` L24/L117-121 reference them; no `assets/` directory exists | Every page loaded unstyled and inert (confirmed on the live site) |
+| A2 | `docs/` referenced by README does not exist | README "Project structure", "Notes & etiquette" | Dead documentation links |
+| A3 | `tools/*.mjs` suite referenced by README does not exist | README "Run it locally" | Self-checks could not run |
+| A4 | README advertises tag `v1.0.0-stable-checkpoint` | `git tag` empty, repo has 1 commit | Revert instruction cannot work |
+| A5 | README "Live demo" points at `buffedlizard55-lab.github.io/MLB-Live-PBP`; that repo is **404** via the GitHub API and repo search returns 0 results | `api.github.com/repos/buffedlizard55-lab/MLB-Live-PBP` → 404 | Original source cannot be re-downloaded; `assets/` had to be reconstructed |
+| A6 | `server.mjs`: `decodeURIComponent` can throw on a malformed `%` escape (uncaught → process exit); containment test `startsWith(REPO_DIR)` accepts sibling dirs | `server.mjs` static handler | Robustness defects in the local server only (Pages never runs it) |
+| A7 | `data/` (server store) not in `.gitignore` | `.gitignore` | **Fixed** — `data/` added |
+
+## Task board (session `arena-f7276bda`)
+
+| Task | Status | Session | File scope | Notes |
+|---|---|---|---|---|
+| T1 Audit repo vs README contract | done | `arena-f7276bda` | `COORDINATION.md` | Table above |
+| T2 Rebuild `assets/css/style.css` | done | `arena-f7276bda` | `assets/css/style.css` | Covers every class on the four pages |
+| T3 Rebuild `assets/js/api.js` | done | `arena-f7276bda` | `assets/js/api.js` | Endpoints as README documents them |
+| T4 Rebuild `assets/js/ui.js` | done | `arena-f7276bda` | `assets/js/ui.js` | Abbreviations verified vs `/api/v1/teams` |
+| T5 Rebuild `assets/js/reviews.js` | done | `arena-f7276bda` | `assets/js/reviews.js` | Types resolved via the official `gameStatus` registry |
+| T6 Rebuild `assets/js/feed-log.js` | done | `arena-f7276bda` | `assets/js/feed-log.js` | localStorage + optional server log + SSE |
+| T7 Rebuild `assets/js/scoreboard.js` | done | `arena-f7276bda` | `assets/js/scoreboard.js` | 500 ms poll, 125 ms sweep, offseason hint |
+| T8 Rebuild `assets/js/game.js` | done | `arena-f7276bda` | `assets/js/game.js` | Includes F-009 per-row source links |
+| T9 Rebuild `assets/js/props.js` | done | `arena-f7276bda` | `assets/js/props.js` | Six documented drivers; constants flagged U-2/U-9 |
+| T10 Rebuild `assets/js/reviews-feed.js` | done | `arena-f7276bda` | `assets/js/reviews-feed.js` | Filters, score tracker, sound, alerts, scoring changes |
+| T11 Fix `server.mjs` crash/containment (A6), ignore `data/` (A7) | A7 done · A6 open | `arena-f7276bda` | `.gitignore` done, `server.mjs` open | A6 published as U-3 (out of scope, unused by Pages) |
+| T12 Verification report + Flagged page | needs review | `arena-f7276bda` | `docs/verification-report.md`, `flagged.html` | 12 items flagged (U-1…U-11, I-8) |
+| T13 Integration: PR → `main`, merge, confirm Pages | in progress | `arena-f7276bda` | repo root | [#6](https://github.com/snapquast73-boop/LIVPBP/pull/6) |
+| T14 Test harness | done | `arena-f7276bda` | `tools/smoke-test.mjs`, `package.json` | `npm test` → 40 passed, 0 failed |
+| T15 Merge with `main` (parallel sessions) | done | `arena-f7276bda` | all conflicting files | Section "Merge record" below |
+
+## Verification log (session `arena-f7276bda`)
+
+| When | What was checked | Official source | Result |
+|---|---|---|---|
+| 2026-11-20 | Review-status registry (`M*`, `N*`, `IH`, `MJ`/`NJ`, `NH`) | https://statsapi.mlb.com/api/v1/gameStatus | Confirmed official wording for every code |
+| 2026-11-20 | Schedule shape (`dates[].games[]`, `status`, `teams`, `score`) | https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=2026-09-15 | Confirmed (15 games) |
+| 2026-11-20 | `reviewDetails {isOverturned, inProgress, reviewType, challengeTeamId}` + four real review events (`MJ`, `MD`, `MA`, `NA`) | https://statsapi.mlb.com/api/v1/game/823109/playByPlay | Confirmed |
+| 2026-11-20 | Run attribution `runners[].details{isScoringEvent, playIndex}` | https://statsapi.mlb.com/api/v1/game/824466/playByPlay | Confirmed |
+| 2026-11-20 | `gameData.review` + `gameData.absChallenges` counters | https://statsapi.mlb.com/api/v1.1/game/824466/feed/live | Confirmed `usedSuccessful/usedFailed/remaining` |
+| 2026-11-20 | `os_ruling_pending_primary` / `_prior` event types | https://statsapi.mlb.com/api/v1/eventTypes | Confirmed |
+| 2026-11-20 | Official club abbreviations (30 teams) | https://statsapi.mlb.com/api/v1/teams?sportId=1 | Confirmed |
+| 2026-11-20 | Deployed site was an inert shell | https://snapquast73-boop.github.io/LIVPBP/ | Confirmed |
+| 2026-11-20 | Whole site renders/persists (network-free) | `npm test` | 40 passed, 0 failed |
+| 2026-11-20 | Combined checker from the parallel session | `node tools/restoration-check.mjs` | ALL CHECKS PASSED |
+| 2026-11-20 | Local server static + feed-log round-trip | `node server.mjs` + curl | All 200, POST→GET OK |
+
+## Merge record (conflict with the parallel sessions' work)
+
+`git merge origin/main` conflicted on every asset file (both sessions created them), the three
+page footers, `COORDINATION.md` and `flagged.html`.
+
+Resolution — **nothing was discarded**:
+
+| File(s) | Resolution |
+|---|---|
+| `assets/css/style.css`, `assets/js/*.js` | This session's implementations kept (superset: all six forecast drivers, documented 500/250/125 ms cadences, ABS + boundary + pending-ruling + scoring-change tracking). |
+| `assets/js/game.js` | Kept, **plus** the parallel session's F-009 fixes ported in: per-row official source links on every linescore and box-score row, and absent values rendered as an unverified “–” instead of a substituted label. |
+| `404.html` | Parallel session's version kept (root-resolved `<base>` so nested Pages 404 paths style and navigate). |
+| `README.md` | Parallel session's version kept (live-demo link now points at this project's Pages site). |
+| `index.html`, `game.html`, `reviews.html` | Footer link to `flagged.html` unified to the parallel session's wording. |
+| `flagged.html` | This session's page kept as sections 1–4; the parallel session's verification table and F-001…F-009 list preserved verbatim as sections 5–6, with a status note per item (R-1…R-4). |
+| `COORDINATION.md` | This file: merged board, with the previous board reproduced verbatim below. |
+| `.github/workflows/site-check.yml`, `tools/restoration-check.mjs` | Parallel session's files kept unchanged; the workflow also runs this session's `npm test`. |
+| `tools/smoke-test.mjs`, `docs/verification-report.md`, `package.json`, `.nojekyll` | This session's additions, no conflict. |
+
+---
+
+# Preserved board — sessions `681bfa13` / `f8d351d0` (verbatim)
+
+Session ID for this session: `681bfa13` (Arena branch `arena/681bfa13-livpbp`).
+Arena fixes this session to that branch, so the per-session `session-<id>/<task>`
+branch rule in the task brief cannot be followed literally; all work happens on
+`arena/681bfa13-livpbp` and this is logged here as irregularity F-001 (see
+`flagged.html`). No other session had claimed any task when this board was
+created (the repo contained no COORDINATION.md and a single commit,
+`aef1a74 Add files via upload`).
+
+## Diagnosis (verified 2026-11-20)
+
+The uploaded repo is missing every file under `assets/`, plus `docs/` and
+`tools/`, that the three HTML pages and `README.md` reference. `git ls-files`
+on the base commit lists only: `.gitignore`, `404.html`, `LICENSE`,
+`README.md`, `game.html`, `index.html`, `reviews.html`, `server.mjs`.
+Every page therefore loads with no CSS and no JavaScript and cannot function.
+The original upstream repo (`buffedlizard55-lab/MLB-Live-PBP`, named as the
+live demo in `README.md`) returns GitHub API 404 and `git ls-remote` "Repository
+not found" as of 2026-11-20, so the missing files cannot be recovered from the
+original author; they are reconstructed from the in-repo spec (README + HTML
+contracts + `server.mjs` API contract) and verified against the live MLB
+StatsAPI. Reconstruction deviations are published on `flagged.html`.
+
+## Tasks
+
+| # | Task | Status | Owner | Files in scope |
+|---|------|--------|-------|----------------|
+| T1 | Coordination board + diagnosis | done | 681bfa13 | `COORDINATION.md` |
+| T2 | Reconstruct shared client/UI (`api.js`, `ui.js`) | done | 681bfa13 | `assets/js/api.js`, `assets/js/ui.js` |
+| T3 | Reconstruct review parser + feed log (`reviews.js`, `feed-log.js`) | done | 681bfa13 | `assets/js/reviews.js`, `assets/js/feed-log.js` |
+| T4 | Reconstruct pages (`scoreboard.js`, `game.js`, `props.js`, `reviews-feed.js`) + stylesheet | done | 681bfa13 | `assets/css/style.css`, `assets/js/scoreboard.js`, `assets/js/game.js`, `assets/js/props.js`, `assets/js/reviews-feed.js` |
+| T5 | Flagged for Review page + footer links + README demo link | done | 681bfa13 | `flagged.html`, footers of `index.html`/`game.html`/`reviews.html`, `README.md` |
+| T6 | Local verification (syntax, link check, server smoke test) | done | 681bfa13 | `tools/restoration-check.mjs` |
+| T7 | Integration: PR to `main`, merge, confirm GitHub Pages deploy | done | 681bfa13 | (GitHub) |
+
+Rules honoured from the brief: small frequent commits; `git pull --rebase`
+before every push; never mark anything verified without an official source
+linked; unverified values are left blank and flagged, not inferred.
+
+## Sources used (official only)
+
+- MLB StatsAPI live responses, `https://statsapi.mlb.com/api/v1/schedule`,
+  `/api/v1.1/game/{gamePk}/feed/live`, `/api/v1/teams`, `/api/v1/people/{id}/stats`
+  (field shapes re-checked 2026-11-20; see `flagged.html` table).
+- GitHub REST API for this repo's Pages config:
+  `GET https://api.github.com/repos/snapquast73-boop/LIVPBP/pages`
+  → legacy build, branch `main`, path `/`, `https://snapquast73-boop.github.io/LIVPBP/`.
+- GitHub Pages docs: https://docs.github.com/en/pages
+
+## Log
+
+- 2026-11-20 — 681bfa13: created board, claimed T1–T4. Upstream repo 404
+  (verified via `gh api repos/buffedlizard55-lab/MLB-Live-PBP` and
+  `git ls-remote`). Own repo Pages already enabled (legacy, `main`, `/`).
+
+- 2026-11-20 — 681bfa13: T2–T6 done. All 9 missing asset files reconstructed
+  (assets/css/style.css; assets/js/{api,ui,reviews,feed-log,scoreboard,game,
+  props,reviews-feed}.js) plus flagged.html and tools/restoration-check.mjs.
+  Verified: `node tools/restoration-check.mjs` ALL CHECKS PASSED (local refs
+  exist, JS parses, server.mjs health/feed-log round-trip, 10 static routes
+  200). jsdom DOM smoke (stub fetch, verified-shape fixtures): scoreboard,
+  game and replay-feed pages all render with no page JS errors. Official
+  registries re-checked live 2026-11-20: /api/v1/gameStatus (MJ/NJ/M*/N*/IH)
+  and /api/v1/eventTypes (os_ruling_pending_*) — see flagged.html.
+
+### Parallel integration handoff
+
+- `arena/f8d351d0-livpbp` independently reconstructed and tested the missing frontend before discovering overlapping work. [PR #4](https://github.com/snapquast73-boop/LIVPBP/pull/4) had already merged at `e6e0ebfd27e2b70a2e2156aaa64bcf8f2d607117`. The merge into this branch conflicted in the board, README, page HTML and frontend assets. Conflict resolution retains the published implementation, preserving the other session's work. This branch's [PR #3](https://github.com/snapquast73-boop/LIVPBP/pull/3) adds only this handoff and automated checks of the existing smoke test.
+- **Needs review — request to the published frontend owner:** add an official MLB source link to each linescore and player-stat row and mark absent values unverified without substituting fallback player labels. The current renderers in `assets/js/game.js` lack row-level links. Also check the nested project 404 stylesheet and home link in `404.html`. These overlapping files were not edited in the handoff. Official comparison sources: [MLB linescore](https://statsapi.mlb.com/api/v1/game/813026/linescore), [MLB box score](https://statsapi.mlb.com/api/v1/game/813026/boxscore), and [GitHub Pages project paths](https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages#types-of-github-pages-sites).
+- Independently checked MLB's [sample schedule](https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=2025-10-25&hydrate=probablePitcher), the corresponding [live-feed response](https://statsapi.mlb.com/api/v1.1/game/813026/feed/live), and [structured replay fields](https://statsapi.mlb.com/api/v1/game/813026/playByPlay?fields=allPlays,reviewDetails,isOverturned,reviewType,challengeTeamId). These are historical sample checks, not verification of every MLB record or original-site parity. See [Pages deployment history](https://github.com/snapquast73-boop/LIVPBP/deployments/github-pages) for the published revisions.
+
+- The first pre-push rebase tried to flatten the integration merge and replay PR #4, causing a duplicate-board conflict. Aborted that rebase to retain the resolved merge; used a merge-preserving rebase before pushing.
+
+- 2026-11-20 — 681bfa13: INTEGRATION DONE.
+  [PR #4](https://github.com/snapquast73-boop/LIVPBP/pull/4) merged to `main`
+  (merge commit `e6e0ebfd27e2b70a2e2156aaa64bcf8f2d607117`, 2026-11-20T22:19:25Z).
+  GitHub Pages build for that commit reached status `built`; live site,
+  `/flagged.html` and `/assets/js/scoreboard.js` confirmed at
+  https://snapquast73-boop.github.io/LIVPBP/ . PR #3 (parallel session
+  `f8d351d0`) then merged its handoff + `site-check` workflow on top.
+  This session's first PR #5 attempt conflicted with that; resolved by
+  rebasing onto `origin/main` and merging both board versions — no other
+  session's work discarded (log entry required by the conflict rule).
+- 2026-11-20 — 681bfa13: addressed the two "needs review" requests from the
+  PR #3 handoff in the follow-up PR: (1) linescore/box-score rows in
+  `assets/js/game.js` now carry per-row official StatsAPI source links and
+  absent player names render as an unverified blank instead of a
+  substituted `Player <id>` label; (2) `404.html` now resolves its
+  stylesheet/home link from the project root so nested Pages 404 paths
+  still style and navigate correctly.
+
+---
+
+## Final integration record
+
+| Field | Value |
+|---|---|
+| Branch | `arena/f7276bda-livpbp` |
+| Pull request | [#6](https://github.com/snapquast73-boop/LIVPBP/pull/6) — **MERGED** (merge commit, not squash) |
+| Merge commit | `9274cab3e68bb585842f12c52b6ae061cb97caa5` |
+| Merged at | 2026-11-20T22:24:19Z |
+| Site checks on `main` | run 44828682775 → **success** (`test` job + `dom-smoke` job) |
+| GitHub Pages build | `pages/builds/latest` → `status: "built"` for commit `9274cab`, duration 50.2 s |
+| Live site | https://snapquast73-boop.github.io/LIVPBP/ · `/flagged.html` · `/assets/js/*.js` all serving the rebuilt files |
+| Test suites | `npm test` → 40 passed, 0 failed · `node tools/restoration-check.mjs` → ALL CHECKS PASSED |
+| Flagged items | `flagged.html` (U-1…U-11, I-8, plus the preserved F-001…F-009 and R-1…R-4) |
+
+Deployment confirmation detail: the first fetch of a deployed asset right after the build returned the
+**previous** session's `scoreboard.js` (GitHub Pages CDN cache), so the live file was re-fetched with a
+cache-busting query and matched this branch's implementation (`LIVE_POLL_MS = 500`, `STATUS_SWEEP_MS = 125`,
+`renderIfChanged`, `offerRecentDate`). No action needed; CDN entries expire on their own.
+
+## Request log
+
+| When | From | To | Request | Status |
+|---|---|---|---|---|
+| 2026-11-20 | `arena-f7276bda` | owner | Review `flagged.html` U-1…U-11 (model constants, colour palette, headshot URL, cadence, static-hosting limits) | needs review |
+
+---
+
+# Session `arena/1f908513-livpbp` — Unclaimed Scope Completion & Live-API Integration Re-Verification
+
+- **Session ID:** `1f908513` (branch fixed by Arena to `arena/1f908513-livpbp`, branched from `aef1a74`).
+- **Merge conflict resolution log (2026-11-20 UTC):** While this session was auditing live MLB StatsAPI responses, parallel sessions (`681bfa13`, `f8d351d0`, `f7276bda`) merged PRs #3–#9 to `main` (`395905c`). Merging `origin/main` produced an `add/add` conflict only on `COORDINATION.md`. Resolved by preserving 100% of `origin/main`'s `COORDINATION.md` and all merged files verbatim, then claiming only the remaining unclaimed/open items (`A6` on `server.mjs`, missing `docs/*` and `tools/*` referenced in `README.md`, and final integration re-verification against live 2026 MLB StatsAPI payloads).
+
+## Task Board (`arena/1f908513-livpbp`)
 
 | Task ID | Task Description | Status | Owning Session | File Scope |
 | --- | --- | --- | --- | --- |
-| `T-01` | Line-by-line verification against live official MLB StatsAPI & MLB.com sources (`gameStatus`, `eventTypes`, `teams`, `schedule`, `feed/live`, `playByPlay`, `people/stats`, copyright & scoring-changes pages) | `in progress` | `arena/1f908513-livpbp` | `COORDINATION.md`, `docs/verification-report.md`, `docs/api-compliance.md`, `docs/scoring-changes.md` |
-| `T-02` | Restore shared client core & persistence (`api.js`, `ui.js`, `feed-log.js`) matching HTML/server contracts and verified StatsAPI endpoints | `in progress` | `arena/1f908513-livpbp` | `assets/js/api.js`, `assets/js/ui.js`, `assets/js/feed-log.js` |
-| `T-03` | Restore review/challenge/ABS/scoring-change parser & two-sided hit forecast (`reviews.js`, `props.js`) | `in progress` | `arena/1f908513-livpbp` | `assets/js/reviews.js`, `assets/js/props.js` |
-| `T-04` | Restore page controllers & dark Gameday stylesheet (`style.css`, `scoreboard.js`, `game.js`, `reviews-feed.js`) | `in progress` | `arena/1f908513-livpbp` | `assets/css/style.css`, `assets/js/scoreboard.js`, `assets/js/game.js`, `assets/js/reviews-feed.js` |
-| `T-05` | Restore deterministic test suites, calibration/derivation scripts, offline preview, and optional Actions workflow templates (`tools/*`, `docs/workflows/*`) | `in progress` | `arena/1f908513-livpbp` | `tools/*.mjs`, `tools/run-risk-preview.html`, `docs/workflows/pages.yml`, `docs/workflows/smoke.yml` |
-| `T-06` | Publish clearly labeled "Flagged for Review" page (`flagged.html`), verify line-by-line source links, update Pages/navigation links, and integrate cleanly to `main` + GitHub Pages | `in progress` | `arena/1f908513-livpbp` | `flagged.html`, `index.html`, `game.html`, `reviews.html`, `404.html`, `README.md`, `.gitignore`, `.nojekyll` |
-
-## 3. Session Activity Log
-
-- **2026-11-20 UTC (`arena/1f908513-livpbp`):** Created `COORDINATION.md`, audited initial commit `aef1a74c`, claimed tasks `T-01` through `T-06` on session branch `arena/1f908513-livpbp`, and began live verification against official MLB StatsAPI and MLB.com endpoints.
+| `S1f-1` | Fix open irregularity `A6` in `server.mjs` (`decodeURIComponent` malformed-URI guard + `REPO_DIR + path.sep` sibling-directory containment check) | `in progress` | `arena/1f908513-livpbp` | `server.mjs` |
+| `S1f-2` | Restore missing documentation & workflow files linked from `README.md` so no Markdown/site links 404 | `in progress` | `arena/1f908513-livpbp` | `docs/api-compliance.md`, `docs/scoring-changes.md`, `docs/workflows/pages.yml`, `docs/workflows/smoke.yml`, `docs/verification-report.md` |
+| `S1f-3` | Restore all 16 deterministic `tools/*.mjs` self-check & derivation scripts plus `tools/run-risk-preview.html` referenced in `README.md` | `in progress` | `arena/1f908513-livpbp` | `tools/hit-model-test.mjs`, `tools/review-test.mjs`, `tools/reviews-feed-test.mjs`, `tools/replay-feed-render-test.mjs`, `tools/review-probe-test.mjs`, `tools/review-status-test.mjs`, `tools/review-watcher-test.mjs`, `tools/page-status-watcher-test.mjs`, `tools/api-rate-limit-test.mjs`, `tools/official-scoring-test.mjs`, `tools/api-fields-test.mjs`, `tools/scoring-change-test.mjs`, `tools/feed-log-persistence-test.mjs`, `tools/cross-browser-persistence-test.mjs`, `tools/model-calibration-report.mjs`, `tools/count-model-derivation.mjs`, `tools/run-risk-preview.html` |
+| `S1f-4` | Final integration line-by-line re-verification & live-StatsAPI bug fixes (`gameData.teams` direct shape in `game.js`, `expectedStatistics.avg` xBA & `vsPlayerTotal` H2H in `props.js`, `MF` fallback & PA-ending `MJ` counts in `reviews.js`, per-row official source links & unverified blank value cells in `flagged.html`) | `in progress` | `arena/1f908513-livpbp` | `assets/js/game.js`, `assets/js/props.js`, `assets/js/reviews.js`, `flagged.html` |
+| `S1f-5` | Full build/link/DOM/server verification, PR to `main`, merge, and GitHub Pages live deployment confirmation | `in progress` | `arena/1f908513-livpbp` | `COORDINATION.md` |
