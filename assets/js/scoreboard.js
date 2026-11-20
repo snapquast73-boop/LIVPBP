@@ -157,11 +157,14 @@
       .then(function () { state.sweepInFlight = false; });
   }
 
-  /* One request, cached 5 min: the latest date in the last 10 days with games. */
+  /* One request, cached 5 min: the latest date in the previous 45 days with
+   * games.  45 days rather than a few days because the MLB calendar has gaps
+   * (All-Star break, the end of the season) where a short window finds nothing
+   * and the visitor is left with an empty scoreboard. */
   function offerRecentDate() {
     if (state.lastGameDate !== undefined || state.lookingForRecent) return;
     state.lookingForRecent = true;
-    var from = MLB.shiftISODate(state.date, -10);
+    var from = MLB.shiftISODate(state.date, -45);
     MLB.scheduleRange(from, state.date)
       .then(function (payload) {
         var dates = ((payload && payload.dates) || []).filter(function (d) {
