@@ -65,7 +65,7 @@ test fixtures): `MJ` overturned, `MD` stands, `MA` overturned, `NA` stands.
 ## 4. Behaviour implemented and how it was verified
 
 Network-free harness: `node tools/smoke-test.mjs` (jsdom + a local static server; only `fetch`
-is stubbed, with payloads matching the shapes in §3). 37 assertions, all passing:
+is stubbed, with payloads matching the shapes in §3). 40 assertions, all passing:
 
 1. **reviews.js** — code → official label via the registry; ABS detection; boundary detection;
    pitch-level vs play-level extraction; run-at-risk attribution limited to the reviewed event;
@@ -84,6 +84,10 @@ is stubbed, with payloads matching the shapes in §3). 37 assertions, all passin
 6. **feed-log.js** — merge keeps both sides, is idempotent, accumulates irregularity notes.
 7. **Static integrity** — every local `href`/`src` on `index.html`, `game.html`, `reviews.html`,
    `404.html`, `flagged.html` resolves to a file.
+8. **Offseason paths** — an empty slate renders a message (not an error state) and one cached range
+   query offers the most recent date that did have games.
+9. **Parallel session's checker** — `node tools/restoration-check.mjs` (kept from the earlier
+   restoration) also passes: local references, JS syntax, and the `server.mjs` API contract.
 
 ## 5. Flagged for review (see `flagged.html` for the rendered table)
 
