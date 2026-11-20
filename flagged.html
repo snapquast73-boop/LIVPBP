@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flagged for Review — MLB Live PBP</title>
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="btn" href="index.html">← Scoreboard</a>
+    <a class="btn btn-feed" href="reviews.html">Replay Feed</a>
+  </header>
+  <main class="game-main">
+    <h1>Flagged for Review</h1>
+    <p>The source column on each data row links directly to MLB. Blank fields mean MLB did not supply the value or the site could not verify it. A reported zero is shown as zero.</p>
+    <section class="panel" id="upstream">
+      <h2>Original site and assets — unverified</h2>
+      <p>The initial upload included HTML but no stylesheet, browser scripts, or historical test suite. The original repository and demo cited in the upload could not be retrieved. The interface was reconstructed from the uploaded HTML and checked against MLB responses; exact styling and behavior parity have not been verified.</p>
+      <p><a href="https://github.com/snapquast73-boop/LIVPBP/tree/aef1a74c40143a7fff9d24853418002e008b79b1">GitHub: initial upload</a></p>
+    </section>
+    <section class="panel" id="forecast">
+      <h2>Hit forecast — unverified</h2>
+      <p>No probabilities are published. The original model implementation and calibration were not included, and official statistics do not confirm the original app's predictions.</p>
+      <p><a href="https://www.mlb.com/glossary/statcast/expected-batting-average">MLB: expected batting average and its definition</a></p>
+    </section>
+    <section class="panel" id="reviews">
+      <h2>Advanced review tracking — unverified or not restored</h2>
+      <p>The feed displays official live review statuses and structured review entries. Absence from the feed does not establish that no review occurred. The original before/possible/after score tracker, runs-at-risk alerts, counters, sound, scoring-change history, and persistence integration are not restored. No review outcome is predicted, and no score change is attributed to a review without a verified implementation.</p>
+      <p><a href="https://www.mlb.com/glossary/rules/replay-review">MLB: replay review rules</a> · <a href="https://statsapi.mlb.com/api/v1/gameStatus">MLB: game status registry</a> · <a href="https://www.mlb.com/official-information/scoring-changes">MLB: official scoring changes</a></p>
+    </section>
+    <section class="panel" id="live">
+      <h2>Live coverage and response timing — unverified</h2>
+      <p>The historical game below verifies sample data, not every season or in-progress MLB payload. The upload's subsecond timing claims were not verified and are not used. The browser displays request failures instead of substituting data.</p>
+      <p><a href="https://statsapi.mlb.com/api/v1/schedule?sportId=1&amp;date=2025-10-25">MLB: sample schedule</a> · <a href="https://statsapi.mlb.com/api/v1.1/game/813026/feed/live">MLB: sample game feed</a></p>
+    </section>
+  </main>
+</body>
+</html>

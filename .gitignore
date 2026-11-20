@@ -6,3 +6,6 @@ Thumbs.db
 node_modules/
 .vscode/
 .idea/
+
+# Local feed logs
+/data/
