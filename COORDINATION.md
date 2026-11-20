@@ -199,6 +199,8 @@ linked; unverified values are left blank and flagged, not inferred.
 | Site checks on `main` | run 44828682775 → **success** (`test` job + `dom-smoke` job) |
 | GitHub Pages build | `pages/builds/latest` → `status: "built"` for commit `9274cab`, duration 50.2 s |
 | Live site | https://snapquast73-boop.github.io/LIVPBP/ · `/flagged.html` · `/assets/js/*.js` all serving the rebuilt files |
+| Follow-up PR | [#9](https://github.com/snapquast73-boop/LIVPBP/pull/9) — **MERGED** (`395905c4c7f6b9da7c537761f9924a2c89a94422`), corrected the published check counts; Pages build `built` |
+| Final `main` state | site checks run 44829042200 → **success**; Pages build for `395905c` → `status: "built"` (78 s) |
 | Test suites | `npm test` → 40 passed, 0 failed · `node tools/restoration-check.mjs` → ALL CHECKS PASSED |
 | Flagged items | `flagged.html` (U-1…U-11, I-8, plus the preserved F-001…F-009 and R-1…R-4) |
 
@@ -206,6 +208,16 @@ Deployment confirmation detail: the first fetch of a deployed asset right after 
 **previous** session's `scoreboard.js` (GitHub Pages CDN cache), so the live file was re-fetched with a
 cache-busting query and matched this branch's implementation (`LIVE_POLL_MS = 500`, `STATUS_SWEEP_MS = 125`,
 `renderIfChanged`, `offerRecentDate`). No action needed; CDN entries expire on their own.
+
+## File ownership after this integration (important for later sessions)
+
+The nine front-end assets on `main` (`assets/css/style.css`, `assets/js/*.js`) are the
+implementation described above: contract-complete against the pages and README, with the
+per-row source links from F-009. **Do not replace them wholesale from another branch** — that
+is what caused the conflict this board records. If a later session needs to change behaviour,
+send a pull request that edits the specific function and keeps `npm test` (40 checks) and
+`node tools/restoration-check.mjs` green. `flagged.html`, `docs/verification-report.md` and
+`tools/smoke-test.mjs` are the verification record: extend them, never truncate them.
 
 ## Request log
 
