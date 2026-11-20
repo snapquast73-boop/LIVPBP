@@ -193,11 +193,19 @@ linked; unverified values are left blank and flagged, not inferred.
 | Field | Value |
 |---|---|
 | Branch | `arena/f7276bda-livpbp` |
-| Pull request | [#6](https://github.com/snapquast73-boop/LIVPBP/pull/6) |
-| Merge commit | recorded after the merge completes |
-| GitHub Pages | recorded after the deploy completes |
-| Test suites | `npm test` → 40 passed · `node tools/restoration-check.mjs` → ALL CHECKS PASSED |
+| Pull request | [#6](https://github.com/snapquast73-boop/LIVPBP/pull/6) — **MERGED** (merge commit, not squash) |
+| Merge commit | `9274cab3e68bb585842f12c52b6ae061cb97caa5` |
+| Merged at | 2026-11-20T22:24:19Z |
+| Site checks on `main` | run 44828682775 → **success** (`test` job + `dom-smoke` job) |
+| GitHub Pages build | `pages/builds/latest` → `status: "built"` for commit `9274cab`, duration 50.2 s |
+| Live site | https://snapquast73-boop.github.io/LIVPBP/ · `/flagged.html` · `/assets/js/*.js` all serving the rebuilt files |
+| Test suites | `npm test` → 40 passed, 0 failed · `node tools/restoration-check.mjs` → ALL CHECKS PASSED |
 | Flagged items | `flagged.html` (U-1…U-11, I-8, plus the preserved F-001…F-009 and R-1…R-4) |
+
+Deployment confirmation detail: the first fetch of a deployed asset right after the build returned the
+**previous** session's `scoreboard.js` (GitHub Pages CDN cache), so the live file was re-fetched with a
+cache-busting query and matched this branch's implementation (`LIVE_POLL_MS = 500`, `STATUS_SWEEP_MS = 125`,
+`renderIfChanged`, `offerRecentDate`). No action needed; CDN entries expire on their own.
 
 ## Request log
 
