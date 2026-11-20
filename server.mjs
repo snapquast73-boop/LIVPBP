@@ -393,15 +393,27 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  let safePath = path.normalize(decodeURIComponent(pathname)).replace(/^(\.\.[\/\\])+/, '');
+  let decodedPath;
+  try {
+    decodedPath = decodeURIComponent(pathname);
+  } catch {
+    // Malformed % escape (e.g. "/%"): decodeURIComponent throws URIError.
+    // Answer 400 instead of letting the exception kill the process.
+    sendError(res, 400, 'Bad request');
+    return;
+  }
+  let safePath = path.normalize(decodedPath).replace(/^(\.\.[\/\\])+/, '');
   if (safePath === '/' || safePath === '') safePath = '/index.html';
   if (safePath === '/reviews') safePath = '/reviews.html';
   if (safePath === '/game') safePath = '/game.html';
 
   const filePath = path.join(REPO_DIR, safePath);
 
-  // Security check: ensure path is within REPO_DIR
-  if (!filePath.startsWith(REPO_DIR)) {
+  // Security check: ensure path is within REPO_DIR. Compare against
+  // REPO_DIR + separator so a sibling like "<repo>-evil" (which shares the
+  // string prefix) is not accepted.
+  const repoPrefix = REPO_DIR.endsWith(path.sep) ? REPO_DIR : REPO_DIR + path.sep;
+  if (filePath !== REPO_DIR && !filePath.startsWith(repoPrefix)) {
     sendError(res, 403, 'Forbidden');
     return;
   }
