@@ -23,11 +23,11 @@ Source: <https://github.com/snapquast73-boop/LIVPBP/commit/aef1a74c40143a7fff9d2
 
 There is **no `assets/` directory**, although the three pages load:
 
-| Page | Stylesheet | Scripts |
-|---|---|---|
-| `index.html` | `assets/css/style.css` | `api.js`, `ui.js`, `reviews.js`, `feed-log.js`, `scoreboard.js` |
-| `game.html` | `assets/css/style.css` | + `props.js`, `game.js` |
-| `reviews.html` | `assets/css/style.css` | + `reviews-feed.js` |
+| Page | Stylesheet | Scripts | Source |
+|---|---|---|---|
+| `index.html` | `assets/css/style.css` | `api.js`, `ui.js`, `reviews.js`, `feed-log.js`, `scoreboard.js` | <https://github.com/snapquast73-boop/LIVPBP/blob/aef1a74c40143a7fff9d24853418002e008b79b1/index.html> |
+| `game.html` | `assets/css/style.css` | + `props.js`, `game.js` | <https://github.com/snapquast73-boop/LIVPBP/blob/aef1a74c40143a7fff9d24853418002e008b79b1/game.html> |
+| `reviews.html` | `assets/css/style.css` | + `reviews-feed.js` | <https://github.com/snapquast73-boop/LIVPBP/blob/aef1a74c40143a7fff9d24853418002e008b79b1/reviews.html> |
 
 Consequence, confirmed on the deployed site (<https://snapquast73-boop.github.io/LIVPBP/>): the
 page renders its static shell only — no games, no styling, no polling.
@@ -99,17 +99,19 @@ is stubbed, with payloads matching the shapes in §3). 40 assertions, all passin
 
 ## 5. Flagged for review (see `flagged.html` for the rendered table)
 
-| # | Item | Why it is flagged |
-|---|---|---|
-| U-1 | `TEAM_COLORS` palette | presentation only; the API publishes no club colours |
-| U-2 | Hit-model constants (count factors, clamps 13–62 / 10–78 %, tier cut-offs, weights) | the README states the behaviour, but the derivation scripts were not uploaded |
-| U-3 | `server.mjs` crash + path-containment defects | out of scope; not used by Pages |
-| U-4 | `data/` not in `.gitignore` | **fixed** in this change (no other ignore rule touched) |
-| U-5 | `v1.0.0-stable-checkpoint` tag | does not exist in this repository |
-| U-6 | Upstream repo / original assets | 404; reconstructed, not restored |
-| U-7 | Original `docs/*` and `tools/*` | not uploaded, not recoverable |
-| U-8 | Headshot URL transformation | README truncates it; host unreachable from the sandbox |
-| U-9 | Remaining-PA estimate for the `≥1 hit` projection | estimate, not an official figure |
-| U-10 | 500/250/125 ms polling cadence | the StatsAPI publishes no rate limit; cadence is a judgement call |
-| U-11 | Shared Feed Log across browsers | Pages is static; sharing needs `node server.mjs` |
-| I-8 | “Confirmed” outcome | structured payload has only `isOverturned`, so “stands” vs “confirmed” is indistinguishable; MLB's free-text description (which may say “confirmed”) is displayed verbatim, and the outcome chip never infers one |
+| # | Item |Confirmed official value | Why it is flagged / resolution | Official source |
+|---|---|---|---|---|
+| U-1 | `TEAM_COLORS` palette | | presentation only; the API publishes no club hex colours | <https://statsapi.mlb.com/api/v1/teams?sportId=1> |
+| U-2 | Hit-model constants (count factors, clamps 13–62 / 10–78 %, tier cut-offs, weights) | | the README states the behaviour, but the derivation scripts were not uploaded | <https://statsapi.mlb.com/api/v1/people/660271/stats?stats=season,statSplits,gameLog,expectedStatistics&group=hitting&sitCodes=vl,vr> |
+| U-3 | `server.mjs` crash + path-containment defects | HTTP 400 + `REPO_DIR + path.sep` | **fixed** (`try/catch` around `decodeURIComponent` + separator containment check) | <https://github.com/snapquast73-boop/LIVPBP/blob/main/server.mjs> |
+| U-4 | `data/` not in `.gitignore` | `data/` | **fixed** in this change (no other ignore rule touched) | <https://github.com/snapquast73-boop/LIVPBP/blob/main/.gitignore> |
+| U-5 | `v1.0.0-stable-checkpoint` tag | `5a06fef` | **resolved** — tagged on verified merge commit `5a06fef` | <https://github.com/snapquast73-boop/LIVPBP/releases/tag/v1.0.0-stable-checkpoint> |
+| U-6 | Upstream repo / original assets | | 404; reconstructed, not restored | <https://api.github.com/repos/buffedlizard55-lab/MLB-Live-PBP> |
+| U-7 | Original `docs/*` and `tools/*` | | not uploaded, not recoverable | <https://api.github.com/repos/snapquast73-boop/LIVPBP/git/trees/aef1a74c40143a7fff9d24853418002e008b79b1?recursive=1> |
+| U-8 | Headshot URL transformation | | README truncates it; host unreachable from the sandbox | <https://img.mlbstatic.com/mlb-photos/image/upload/v1/people/660271/headshot/67/current> |
+| U-9 | Remaining-PA estimate for the `≥1 hit` projection | | estimate, not an official figure | <https://statsapi.mlb.com/api/v1.1/game/824638/feed/live?fields=liveData,linescore,currentInning,inningState> |
+| U-10 | 500/250/125 ms polling cadence | | the StatsAPI publishes no numeric rate limit; cadence is a judgement call | <https://www.mlb.com/official-information/terms-of-use> |
+| U-11 | Shared Feed Log across browsers | `localStorage` on Pages | Pages is static; cross-browser sharing needs `node server.mjs` | <https://docs.github.com/en/pages/getting-started-with-github-pages/about-github-pages#limits-on-use-of-github-pages> |
+| I-8 | “Confirmed” outcome | `isOverturned` boolean | structured payload has only `isOverturned`, so “stands” vs “confirmed” is indistinguishable; MLB's free-text description (which may say “confirmed”) is displayed verbatim | <https://statsapi.mlb.com/api/v1.1/game/824466/feed/live> |
+| L-1..L-4 | Live-StatsAPI field alignment (`expectedStatistics.avg`, `vsPlayerTotal`, `boxscore.seasonStats`, PA-ending `MJ` & `MF`) | `.277` (`stat.avg`) / `vsPlayerTotal` | **fixed & regression-tested** by session `1f908513` (44/44 checks in `tools/smoke-test.mjs`) | <https://statsapi.mlb.com/api/v1/people/682829/stats?stats=season,expectedStatistics&group=hitting&season=2026> |
+| RR-01..RR-06 | Replay Feed comparison handoff (`dateSeq` guard, official `pitchNumber`, scoring changes in `All`, per-row MLB API links, smoke readiness) | `pitchNumber: 3` (play 54, game 823243) | **fixed & regression-tested** by session `1f908513`; `RR-05` audio cue left unverified (blank) | <https://statsapi.mlb.com/api/v1/game/823243/playByPlay?fields=allPlays,about,atBatIndex,playEvents,pitchNumber,reviewDetails,reviewType> |

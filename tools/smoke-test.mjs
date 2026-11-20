@@ -352,7 +352,11 @@ const PORT = server.address().port;
 
 async function boot(file, { query = '', beforeParse, fetchImpl } = {}) {
   const virtualConsole = new VirtualConsole();
-  virtualConsole.on('jsdomError', (err) => console.log('    jsdomError:', err.message));
+  const bootErrors = [];
+  virtualConsole.on('jsdomError', (err) => {
+    bootErrors.push(err.message);
+    console.log('    jsdomError:', err.message);
+  });
   virtualConsole.on('error', (...args) => console.log('    console.error:', ...args));
 
   const dom = await JSDOM.fromURL(`http://127.0.0.1:${PORT}/${file}${query}`, {
@@ -370,7 +374,14 @@ async function boot(file, { query = '', beforeParse, fetchImpl } = {}) {
       if (beforeParse) beforeParse(window);
     },
   });
+  /* Wait for all external <script> tags to finish loading and executing before
+   * interacting with page globals (fixes RR-06 race on Scoreboard.pickDate). */
+  const deadline = Date.now() + 2500;
+  while (dom.window.document.readyState !== 'complete' && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 25));
+  }
   await new Promise((r) => setTimeout(r, 120));
+  dom.__bootErrors = bootErrors;
   return dom;
 }
 
@@ -485,6 +496,7 @@ console.log('\n[2] index.html — scoreboard renders from the schedule payload')
   });
 
   await check('no uncaught script errors left the status line in error state', () => {
+    assert(dom.__bootErrors.length === 0, 'unexpected jsdomError(s): ' + dom.__bootErrors.join('; '));
     const status = dom.window.document.getElementById('status-line');
     assert(!status.classList.contains('is-error'), 'status line reports an error: ' + text(status));
   });
@@ -764,6 +776,147 @@ console.log('\n[9] offseason empty state — link to the latest date with games'
   });
 
   dom.window.close();
+}
+
+console.log('\n[10] live-API shape & replay-audit regressions (1f908513 / RR-01..RR-04)');
+{
+  const fs = await import('node:fs/promises');
+  const dom = new JSDOM('<!doctype html><html><body></body></html>', { runScripts: 'outside-only', url: 'http://localhost/' });
+  const w = dom.window;
+  w.fetch = (url) => {
+    const u = String(url);
+    if (u.includes('opposingPlayerId=')) {
+      /* Official StatsAPI vsPlayer returns vsPlayerTotal (career) + vsPlayer (per-season). */
+      return Promise.resolve({
+        ok: true, status: 200, headers: { get: () => null },
+        json: async () => ({
+          stats: [{ type: { displayName: 'vsPlayerTotal' }, splits: [{ stat: { atBats: 10, hits: 4, avg: '.400' } }] }],
+        }),
+      });
+    }
+    if (u.includes('/people/')) {
+      /* Official StatsAPI expectedStatistics stores xBA under stat.avg, not stat.xba. */
+      return Promise.resolve({
+        ok: true, status: 200, headers: { get: () => null },
+        json: async () => ({
+          stats: [
+            { type: { displayName: 'season' }, splits: [
+              { team: { id: 121 }, stat: { avg: '.240', atBats: 200, hits: 48 } },
+              { stat: { avg: '.285', atBats: 450, hits: 128 } },
+            ] },
+            { type: { displayName: 'expectedStatistics' }, splits: [{ stat: { avg: '.301', slg: '.510', woba: '.380' } }] },
+            { type: { displayName: 'statSplits' }, splits: [{ split: 'vr', stat: { avg: '.295', atBats: 310 } }] },
+            { type: { displayName: 'gameLog' }, splits: [] },
+          ],
+        }),
+      });
+    }
+    return routeFetch(url);
+  };
+  w.eval(await fs.readFile(path.join(ROOT, 'assets/js/api.js'), 'utf8'));
+  w.eval(await fs.readFile(path.join(ROOT, 'assets/js/ui.js'), 'utf8'));
+  w.eval(await fs.readFile(path.join(ROOT, 'assets/js/reviews.js'), 'utf8'));
+  w.eval(await fs.readFile(path.join(ROOT, 'assets/js/props.js'), 'utf8'));
+
+  await check('expectedStatistics stat.avg (xBA) & vsPlayerTotal (H2H) & combined splits work', async () => {
+    const f = await w.Props.getForecast({
+      batterId: 682829, batterName: 'Elly De La Cruz', batterHand: 'S',
+      pitcherId: 656849, pitcherName: 'David Peterson', pitcherHand: 'R',
+      season: 2026, gameDate: '2026-08-28', count: { balls: 1, strikes: 0 }, countKnown: true,
+      inning: 3, half: 'top', gameLive: true, gameFinal: false,
+    });
+    assert(String(f.batter.expected && f.batter.expected.xba) === '.301', 'xBA from expectedStatistics.avg missing');
+    assert(String(f.batter.season && f.batter.season.avg) === '.285', 'combined multi-team season split not chosen');
+    const h2hDriver = f.drivers.find((d) => d.key === 'history');
+    assert(h2hDriver && /4-10/.test(h2hDriver.detail), 'vsPlayerTotal H2H not read: ' + JSON.stringify(h2hDriver));
+  });
+
+  await check('RR-02 + PA-ending ABS + MF fallback: official pitchNumber beats array index', () => {
+    const d = w.Reviews.describe('MF');
+    assert(d.reason === 'Close play at 1st', 'MF fallback reason missing, got ' + d.reason);
+
+    const rows = w.Reviews.extractReviews([
+      /* Game 823243 atBatIndex 54 shape: 2 non-pitch actions precede 3 pitches; pitchNumber is 3. */
+      play(54, {
+        about: { atBatIndex: 54, inning: 7, halfInning: 'top', isTopInning: true, isComplete: true, hasReview: true },
+        playEvents: [
+          { index: 0, isPitch: false, details: { description: 'Pitcher Step Off' } },
+          { index: 1, isPitch: false, details: { description: 'Pickoff Attempt 1B' } },
+          { index: 2, isPitch: true, pitchNumber: 1, count: { balls: 1, strikes: 0, outs: 1 }, details: { description: 'Ball' } },
+          { index: 3, isPitch: true, pitchNumber: 2, count: { balls: 1, strikes: 1, outs: 1 }, details: { description: 'Called Strike' } },
+          { index: 4, isPitch: true, pitchNumber: 3, count: { balls: 1, strikes: 2, outs: 1 }, details: { description: 'Called Strike' },
+            reviewDetails: { isOverturned: false, inProgress: false, reviewType: 'MJ', challengeTeamId: 136 } },
+        ],
+      }),
+      /* PA-ending ABS strikeout where MLB attaches reviewDetails on play.reviewDetails. */
+      play(86, {
+        about: { atBatIndex: 86, inning: 9, halfInning: 'bottom', isTopInning: false, isComplete: true, hasReview: true },
+        reviewDetails: { isOverturned: false, inProgress: false, reviewType: 'MJ', challengeTeamId: 142 },
+        playEvents: [
+          { index: 0, isPitch: true, pitchNumber: 1, count: { balls: 0, strikes: 1, outs: 2 }, details: { description: 'Swinging Strike' } },
+          { index: 1, isPitch: true, pitchNumber: 2, count: { balls: 0, strikes: 2, outs: 2 }, details: { description: 'Foul' } },
+          { index: 2, isPitch: true, pitchNumber: 3, count: { balls: 0, strikes: 3, outs: 2 }, details: { description: 'Called Strike' } },
+        ],
+      }),
+    ], { gamePk: 823243, teams: { away: { id: 136 }, home: { id: 142 } } });
+
+    assert(rows[0].absPitchNumber === 3, 'RR-02: expected official pitchNumber 3, got ' + rows[0].absPitchNumber);
+    assert(rows[1].absPitchNumber === 3 && rows[1].absCountBefore.strikes === 2,
+      'PA-ending MJ should resolve final pitch count 0-2 -> 0-3, got ' + JSON.stringify(rows[1]));
+  });
+
+  dom.window.close();
+
+  /* RR-01, RR-03, RR-04 on reviews.html */
+  let resolveSlowSchedule;
+  const slowMarch27 = new Promise((r) => { resolveSlowSchedule = r; });
+  const raceFetch = (url) => {
+    const u = String(url);
+    if (u.includes('/schedule?') && u.includes('date=2026-03-27')) return slowMarch27;
+    if (u.includes('/schedule?') && u.includes('date=2026-03-28')) {
+      return Promise.resolve({ ok: true, status: 200, headers: { get: () => null }, json: async () => ({ totalGames: 0, dates: [] }) });
+    }
+    return routeFetch(u);
+  };
+  const feedDom = await boot('reviews.html', { fetchImpl: raceFetch, beforeParse(win) { win.localStorage.clear(); } });
+  await new Promise((r) => setTimeout(r, 250));
+
+  await check('RR-03 + RR-04: replay rows link to MLB StatsAPI and All shows scoring changes', () => {
+    const links = [...feedDom.window.document.querySelectorAll('#feed-list a[href*="statsapi.mlb.com/api/v1/game/"]')];
+    assert(links.length >= 1, 'RR-04: expected direct official MLB StatsAPI link on replay rows');
+    feedDom.window.ReplayFeed.state.entries.push({
+      id: '823109:1:scoring-change',
+      kind: 'scoring_change',
+      gamePk: 823109,
+      matchupLabel: 'SEA @ MIN',
+      lastSeen: Date.now(),
+      change: { atBatIndex: 1, inningLabel: 'Top 1', batter: 'Test Batter', from: { description: 'Error' }, to: { description: 'Single' }, attribution: 'Official scorer' },
+      review: { typeLabel: 'Official Scoring Change', inningLabel: 'Top 1', batter: { name: 'Test Batter' }, outcome: 'Reclassified', isABS: false, family: 'scoring' },
+    });
+    feedDom.window.ReplayFeed.setFilter('all');
+    const html = text(feedDom.window.document.getElementById('feed-list'));
+    assert(html.includes('Official Scoring Change'), 'RR-03: scoring change must appear in All tab');
+  });
+
+  await check('RR-01: delayed schedule from prior date cannot pollute the newly selected date', async () => {
+    const picker = feedDom.window.document.getElementById('date-picker');
+    picker.value = '2026-03-27';
+    picker.dispatchEvent(new feedDom.window.Event('change'));
+    await new Promise((r) => setTimeout(r, 40));
+    picker.value = '2026-03-28';
+    picker.dispatchEvent(new feedDom.window.Event('change'));
+    await new Promise((r) => setTimeout(r, 80));
+    resolveSlowSchedule({
+      ok: true, status: 200, headers: { get: () => null },
+      json: async () => SCHEDULE,
+    });
+    await new Promise((r) => setTimeout(r, 150));
+    assert(feedDom.window.ReplayFeed.state.date === '2026-03-28', 'date should stay 2026-03-28');
+    assert(feedDom.window.ReplayFeed.state.entries.length === 0,
+      'RR-01: stale 2026-03-27 schedule leaked entries into 2026-03-28: ' + feedDom.window.ReplayFeed.state.entries.length);
+  });
+
+  feedDom.window.close();
 }
 
 function __setDate(dom) {

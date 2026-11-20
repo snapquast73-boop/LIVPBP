@@ -126,7 +126,20 @@
   function seasonLine(feed, playerId, group) {
     var player = playerOf(feed, playerId);
     var stats = player && player.stats && player.stats[group];
-    return stats || null;
+    if (stats) return stats;
+    /* Official feed/live stores per-player season lines under
+     * liveData.boxscore.teams.{away,home}.players.ID<id>.seasonStats[group]
+     * (verified on game 823424 & 824638, 2026-11-20). */
+    var teams = feed && feed.liveData && feed.liveData.boxscore && feed.liveData.boxscore.teams;
+    if (!teams || !playerId) return null;
+    var key = 'ID' + playerId;
+    var sides = ['away', 'home'];
+    for (var i = 0; i < sides.length; i += 1) {
+      var boxPlayer = teams[sides[i]] && teams[sides[i]].players && teams[sides[i]].players[key];
+      var season = boxPlayer && boxPlayer.seasonStats && boxPlayer.seasonStats[group];
+      if (season) return season;
+    }
+    return null;
   }
 
   function signatureOf(feed) {
@@ -449,7 +462,8 @@
           var velo = ev.pitchData && ev.pitchData.startSpeed ? ev.pitchData.startSpeed + ' mph' : '';
           var type = d.type && d.type.description ? d.type.description : '';
           var reviewMark = ev.reviewDetails ? ' 🚨' : '';
-          return '<li><span class="p-num">' + (ev.index !== undefined ? ev.index + 1 : '') + '</span>' +
+          var pNum = typeof ev.pitchNumber === 'number' ? ev.pitchNumber : (ev.isPitch && ev.index !== undefined ? ev.index + 1 : '');
+          return '<li><span class="p-num">' + pNum + '</span>' +
             '<span class="p-call">' + UI.esc(call) + reviewMark + '</span>' +
             '<span>' + UI.esc(type) + '</span>' +
             '<span class="p-velo">' + UI.esc(velo) + '</span></li>';
@@ -595,6 +609,7 @@
           '<span>' + UI.esc(r.inningLabel) + '</span>' +
           (r.challengerSide !== 'unknown' ? '<span>Challenged by ' + UI.esc(r.challenger) + '</span>' : '') +
           '<span>' + UI.esc(r.outcome) + '</span>' +
+          '<a href="https://statsapi.mlb.com/api/v1/game/' + encodeURIComponent(state.gamePk) + '/playByPlay" target="_blank" rel="noopener" title="Official MLB StatsAPI play-by-play source">MLB API ↗</a>' +
         '</div>' +
         '<div class="review-title">' + UI.esc(r.batter.name || '') + ' vs ' + UI.esc(r.pitcher.name || '') + '</div>' +
         (r.description ? '<div class="feed-sub">' + UI.esc(r.description) + '</div>' : '') +

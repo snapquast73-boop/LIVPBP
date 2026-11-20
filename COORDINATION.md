@@ -415,3 +415,26 @@ Merge-conflict note (2026-11-20): rebasing onto `main` @ `9297edc` (PR #12, sess
 - Rebase conflicts during integration were `COORDINATION.md`-only (parallel sessions appending at the same spot: `346299e3`, `8a71f704`, and PRs #14/#16/#18). Each resolved by keeping both entries verbatim; no other session's work discarded. Final task statuses: F132-1…F132-6 all **done**.
 - Remaining flagged items for owner review (unchanged, on `flagged.html`): U-1, U-2, U-6, U-7, U-8, U-9, U-10, U-11, I-8, F-001…F-009. U-3 and U-5 are now Fixed.
 
+
+---
+
+# Session `arena/1f908513-livpbp` — Final Live-StatsAPI & Replay-Audit (`RR-01`–`RR-06`) Integration
+
+- **Session ID:** `1f908513` (branch fixed by Arena to `arena/1f908513-livpbp`, branched from `aef1a74`).
+- **Pull Request:** [#21](https://github.com/snapquast73-boop/LIVPBP/pull/21)
+- **Merge conflict resolution log (2026-11-20 UTC):** Merged `origin/main` (`36b8c6b`, incorporating PRs #3–#20 across sessions `681bfa13`, `f8d351d0`, `f7276bda`, `7e3aaa61`, `346299e3`, `8a71f704`, `24011a61`, and `f132969c`) preserving 100% of all prior board entries and merged code verbatim.
+- **Official sources verified line by line (2026-11-20):**
+  - [`/api/v1/people/682829/stats?stats=season,expectedStatistics`](https://statsapi.mlb.com/api/v1/people/682829/stats?stats=season,expectedStatistics&group=hitting&season=2026) — confirmed `expectedStatistics` exposes xBA in `stat.avg` (`".277"`), not `stat.xba` (`L-1`).
+  - [`/api/v1/people/682829/stats?stats=vsPlayer&opposingPlayerId=656849`](https://statsapi.mlb.com/api/v1/people/682829/stats?stats=vsPlayer&group=hitting&opposingPlayerId=656849) & [`/api/v1/people/656849/stats?stats=season,statSplits`](https://statsapi.mlb.com/api/v1/people/656849/stats?stats=season,statSplits&group=pitching&sitCodes=vl,vr&season=2026) — confirmed `vsPlayerTotal`/`vsPlayer` block names and combined `!split.team` rows on multi-club seasons (`L-2`).
+  - [`/api/v1/game/823424/boxscore`](https://statsapi.mlb.com/api/v1/game/823424/boxscore) & [`/api/v1/game/824638/playByPlay`](https://statsapi.mlb.com/api/v1/game/824638/playByPlay) — confirmed `boxscore.teams.<side>.players.ID<id>.seasonStats` (`L-3`), PA-ending `MJ` `play.reviewDetails` on plays 36/72/86, and `MF` = "Close play at 1st" (`L-4`).
+  - [`/api/v1/game/823243/playByPlay`](https://statsapi.mlb.com/api/v1/game/823243/playByPlay?fields=allPlays,about,atBatIndex,playEvents,pitchNumber,reviewDetails,reviewType) & [`audit/reference-replay-comparison.md`](audit/reference-replay-comparison.md) — addressed all six handoff items (`RR-01`–`RR-06`).
+- **Verification performed:** `npm test` → **44/44 passed (0 `jsdomError`s)**; `node tools/restoration-check.mjs` → **ALL CHECKS PASSED**; `node tests/run-all.mjs` → **syntax OK, 40 local refs OK, 8 bindings OK, 37/37 jsdom render checks OK**; programmatic link audit → **73/73 `flagged.html` rows and 58/58 Markdown table rows carry clickable `https://` official source links**, with blank cells on all unconfirmed items.
+
+## Task Board (`arena/1f908513-livpbp`)
+
+| Task ID | Task Description | Status | Owning Session | File Scope |
+| --- | --- | --- | --- | --- |
+| `S1f-1` | `server.mjs` malformed `%` escape & sibling-directory containment (`A6`/`U-3`) — merged `f132969c` PR #13 fix | `done` | `arena/1f908513-livpbp` | `server.mjs` |
+| `S1f-2` | Live-StatsAPI field fixes (`expectedStatistics.avg` xBA, `vsPlayerTotal` H2H, combined `!split.team` splits, `remainingPAs`, `boxscore.seasonStats`, `MF` fallback, `events[last].index`, PA-ending `MJ` counts) | `done` | `arena/1f908513-livpbp` | `assets/js/props.js`, `assets/js/game.js`, `assets/js/reviews.js` |
+| `S1f-3` | Replay-audit handoff (`RR-01` `dateSeq` guard, `RR-02` official `pitchNumber`, `RR-03` scoring changes in `All`, `RR-04` direct MLB API row links, `RR-06` smoke-test script readiness) | `done` | `arena/1f908513-livpbp` | `assets/js/reviews-feed.js`, `assets/js/reviews.js`, `assets/js/game.js`, `tools/smoke-test.mjs` |
+| `S1f-4` | Per-row official `https://` source links, blank unconfirmed value cells, and `L-1..L-4` + `RR-01..RR-06` tables on `flagged.html` & `docs/*.md` (`RR-05` flagged `needs review`) | `needs review` | `arena/1f908513-livpbp` | `flagged.html`, `docs/verification-report.md`, `docs/statsapi-field-map.md`, `COORDINATION.md` |
