@@ -30,7 +30,7 @@
   var PLAYBYPLAY_FIELDS = 'allPlays,about,atBatIndex,hasReview,isComplete,inning,halfInning,isTopInning,isScoringPlay,' +
     'result,eventType,description,isOut,rbi,awayScore,homeScore,count,outs,matchup,batter,id,fullName,pitcher,' +
     'playEvents,details,call,reviewDetails,isOverturned,inProgress,reviewType,challengeTeamId,runners,' +
-    'isScoringEvent,playIndex,movement,index,isPitch,type,startTime,endTime,hasOutcome';
+    'isScoringEvent,playIndex,movement,index,isPitch,pitchNumber,type,startTime,endTime,hasOutcome';
 
   var FILTERS = [
     { id: 'all', label: 'All' },
@@ -45,6 +45,7 @@
 
   var state = {
     date: MLB.todayISO(),
+    dateSeq: 0,
     filter: 'all',
     games: [],
     log: null,
@@ -126,7 +127,9 @@
     }
   }
 
-  function persist() {
+  function persist(expectedSeq, expectedDate) {
+    if (expectedSeq !== undefined && expectedSeq !== state.dateSeq) return;
+    if (expectedDate !== undefined && expectedDate !== state.date) return;
     if (!state.log) state.log = FeedLog.emptyPayload(state.date);
     state.log.entries = state.entries.slice();
     state.log.snapshots = state.snapshots;
@@ -137,8 +140,13 @@
 
   function adoptLog(log) {
     if (!log) return;
+    if (log.date && MLB.isValidISODate(log.date) && log.date !== state.date) return;
     state.log = log;
-    state.entries = Array.isArray(log.entries) ? log.entries.slice() : [];
+    state.entries = Array.isArray(log.entries)
+      ? log.entries.filter(function (e) {
+          return !e || !e.officialDate || e.officialDate === state.date;
+        })
+      : [];
     state.snapshots = log.snapshots || Object.create(null);
     state.irregularities = log.irregularities || Object.create(null);
   }
@@ -222,7 +230,9 @@
     });
   }
 
-  function ingestGame(result) {
+  function ingestGame(result, expectedSeq, expectedDate) {
+    if (expectedSeq !== undefined && expectedSeq !== state.dateSeq) return;
+    if (expectedDate !== undefined && expectedDate !== state.date) return;
     if (!result || !result.payload) {
       if (result && result.error && !(result.error && result.error.quiet)) {
         state.scanError = result.error;
@@ -380,11 +390,14 @@
   function scan() {
     if (state.scanning) return;
     if (document.hidden) { scheduleScan(1000); return; }
+    var scanSeq = state.dateSeq;
+    var scanDate = state.date;
     state.scanning = true;
     state.nextScanAt = Date.now() + SCAN_MS;
 
-    MLB.schedule(state.date, { ttl: 0, retries: 0 })
+    MLB.schedule(scanDate, { ttl: 0, retries: 0 })
       .then(function (payload) {
+        if (scanSeq !== state.dateSeq || scanDate !== state.date) return null;
         state.games = flattenGames(payload);
         var now = Date.now();
         var due = state.games.filter(function (g) { return shouldFetch(g, now); });
@@ -395,18 +408,24 @@
           return null;
         }
         return runLimited(due, FETCH_CONCURRENCY, function (game) {
-          return fetchGame(game).then(ingestGame);
+          if (scanSeq !== state.dateSeq || scanDate !== state.date) return Promise.resolve();
+          return fetchGame(game).then(function (result) {
+            ingestGame(result, scanSeq, scanDate);
+          });
         }).then(function () {
-          persist();
+          if (scanSeq !== state.dateSeq || scanDate !== state.date) return;
+          persist(scanSeq, scanDate);
           renderIfChanged();
           updateChrome();
         });
       })
       .catch(function (err) {
+        if (scanSeq !== state.dateSeq || scanDate !== state.date) return;
         state.scanError = err;
         updateChrome();
       })
       .then(function () {
+        if (scanSeq !== state.dateSeq || scanDate !== state.date) return;
         state.scanning = false;
         state.lastScanAt = Date.now();
         scheduleScan(SCAN_MS);
@@ -422,8 +441,11 @@
   /* 125 ms official status sweep: catches a review the moment MLB flips it. */
   function sweep() {
     if (document.hidden) return;
+    var sweepSeq = state.dateSeq;
+    var sweepDate = state.date;
     if (!state.games.some(function (g) { return g.status && g.status.abstractGameState === 'Live'; })) return;
-    MLB.slateStatus(state.date).then(function (payload) {
+    MLB.slateStatus(sweepDate).then(function (payload) {
+      if (sweepSeq !== state.dateSeq || sweepDate !== state.date) return;
       var games = flattenGames(payload);
       games.forEach(function (g) {
         var review = Reviews.statusReview(g.status);
@@ -434,8 +456,9 @@
           if (review) {
             /* Out-of-band fetch: don't wait for the current scan to finish. */
             fetchGame(g).then(function (result) {
-              ingestGame(result);
-              persist();
+              if (sweepSeq !== state.dateSeq || sweepDate !== state.date) return;
+              ingestGame(result, sweepSeq, sweepDate);
+              persist(sweepSeq, sweepDate);
               renderIfChanged();
               updateChrome();
             });
@@ -524,7 +547,7 @@
 
   function entryMatches(entry, filter) {
     if (!entry) return false;
-    if (filter === 'all') return (entry.kind === 'review' || entry.kind === 'pending') && !(entry.review && entry.review.isABS);
+    if (filter === 'all') return (entry.kind === 'review' || entry.kind === 'pending' || entry.kind === 'scoring_change') && !(entry.review && entry.review.isABS);
     if (filter === 'abs') return entry.review && entry.review.isABS;
     if (filter === 'challenges') return entry.review && entry.review.family === 'manager';
     if (filter === 'reviews') return entry.review && (entry.review.family === 'umpire' || entry.review.family === 'replay');
@@ -677,6 +700,7 @@
           (r.challengerSide && r.challengerSide !== 'unknown' && r.challenger
             ? '<span>Challenged by ' + UI.esc(r.challenger) + '</span>' : '') +
           '<span>' + new Date(entry.lastSeen || Date.now()).toLocaleTimeString() + '</span>' +
+          '<a href="https://statsapi.mlb.com/api/v1/game/' + encodeURIComponent(entry.gamePk) + '/playByPlay" target="_blank" rel="noopener" title="Official MLB StatsAPI play-by-play source">MLB API ↗</a>' +
         '</div>' +
         '<div class="feed-title">' + UI.esc((r.batter && r.batter.name) || '') +
           (r.pitcher && r.pitcher.name ? ' vs ' + UI.esc(r.pitcher.name) : '') + '</div>' +
@@ -741,7 +765,12 @@
   function setDate(date) {
     var clean = MLB.isValidISODate(date) ? date : MLB.todayISO();
     if (clean === state.date) return;
+    state.dateSeq += 1;
+    var seq = state.dateSeq;
+    clearTimeout(state.timers.scan);
+    state.scanning = false;
     state.date = clean;
+    state.games = [];
     state.entries = [];
     state.snapshots = Object.create(null);
     state.irregularities = Object.create(null);
@@ -749,14 +778,17 @@
     state.nextDue = Object.create(null);
     state.statusByPk = Object.create(null);
     state.log = null;
+    state.lastRenderSignature = '';
     syncNav();
     render();
     FeedLog.closeStream();
-    FeedLog.load(state.date).then(function (log) {
+    FeedLog.load(clean).then(function (log) {
+      if (seq !== state.dateSeq || state.date !== clean) return;
       adoptLog(log);
       render();
-      FeedLog.openStream(state.date);
+      FeedLog.openStream(clean);
       FeedLog.onChange(function (pushed) {
+        if (seq !== state.dateSeq || state.date !== clean) return;
         if (pushed && pushed.date === state.date) {
           adoptLog(FeedLog.mergePayloads(state.log, pushed, state.date));
           render();
@@ -828,11 +860,15 @@
 
     Reviews.loadRegistry();
 
-    FeedLog.load(state.date).then(function (log) {
+    var initSeq = state.dateSeq;
+    var initDate = state.date;
+    FeedLog.load(initDate).then(function (log) {
+      if (initSeq !== state.dateSeq || state.date !== initDate) return;
       adoptLog(log);
       render();
-      FeedLog.openStream(state.date);
+      FeedLog.openStream(initDate);
       FeedLog.onChange(function (pushed) {
+        if (initSeq !== state.dateSeq || state.date !== initDate) return;
         if (pushed && pushed.date === state.date) {
           adoptLog(FeedLog.mergePayloads(state.log, pushed, state.date));
           render();

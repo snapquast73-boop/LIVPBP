@@ -202,6 +202,26 @@
     return { balls: Number(c.balls) || 0, strikes: Number(c.strikes) || 0 };
   }
 
+  /* Official pitch number on a playEvent (RR-02, verified on game 823243
+   * atBatIndex 54 where 2 non-pitch actions precede 3 pitches, so array
+   * index + 1 is 5 while official `pitchNumber` is 3). Prefer `ev.pitchNumber`;
+   * if unprojected fixtures omit `pitchNumber` on `isPitch: true` items, count
+   * only `isPitch === true` events; otherwise return null (never array index). */
+  function pitchNumberOf(playEvents, index) {
+    if (!playEvents || index === null || index < 0 || index >= playEvents.length) return null;
+    var ev = playEvents[index];
+    if (!ev) return null;
+    if (typeof ev.pitchNumber === 'number' && isFinite(ev.pitchNumber)) return Number(ev.pitchNumber);
+    if (ev.isPitch === true) {
+      var count = 0;
+      for (var i = 0; i <= index; i += 1) {
+        if (playEvents[i] && playEvents[i].isPitch === true) count += 1;
+      }
+      return count || null;
+    }
+    return null;
+  }
+
   function halfInningLabel(play) {
     var about = (play && play.about) || {};
     var half = about.halfInning || (about.isTopInning === false ? 'bottom' : 'top');
@@ -313,7 +333,7 @@
           possibleScore: possible,
           runsAtRisk: runs,
           runsAtRiskCount: runs.length,
-          absPitchNumber: absIndex === null ? null : absIndex + 1,
+          absPitchNumber: absIndex === null ? null : pitchNumberOf(events, absIndex),
           absCountBefore: absIndex === null ? null : countBefore(events, absIndex),
           absCountAfter: absIndex === null ? null : countAfter(events, absIndex),
           reviewDetails: details,
