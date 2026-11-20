@@ -27,12 +27,12 @@ StatsAPI. Reconstruction deviations are published on `flagged.html`.
 | # | Task | Status | Owner | Files in scope |
 |---|------|--------|-------|----------------|
 | T1 | Coordination board + diagnosis | done | 681bfa13 | `COORDINATION.md` |
-| T2 | Reconstruct shared client/UI (`api.js`, `ui.js`) | in progress | 681bfa13 | `assets/js/api.js`, `assets/js/ui.js` |
-| T3 | Reconstruct review parser + feed log (`reviews.js`, `feed-log.js`) | in progress | 681bfa13 | `assets/js/reviews.js`, `assets/js/feed-log.js` |
-| T4 | Reconstruct pages (`scoreboard.js`, `game.js`, `props.js`, `reviews-feed.js`) + stylesheet | in progress | 681bfa13 | `assets/css/style.css`, `assets/js/scoreboard.js`, `assets/js/game.js`, `assets/js/props.js`, `assets/js/reviews-feed.js` |
-| T5 | Flagged for Review page + footer links + README demo link | unclaimed | — | `flagged.html`, footers of `index.html`/`game.html`/`reviews.html`, `README.md` |
-| T6 | Local verification (syntax, link check, server smoke test) | unclaimed | — | `tools/restoration-check.mjs` |
-| T7 | Integration: PR to `main`, merge, confirm GitHub Pages deploy | unclaimed | — | (GitHub) |
+| T2 | Reconstruct shared client/UI (`api.js`, `ui.js`) | done | 681bfa13 | `assets/js/api.js`, `assets/js/ui.js` |
+| T3 | Reconstruct review parser + feed log (`reviews.js`, `feed-log.js`) | done | 681bfa13 | `assets/js/reviews.js`, `assets/js/feed-log.js` |
+| T4 | Reconstruct pages (`scoreboard.js`, `game.js`, `props.js`, `reviews-feed.js`) + stylesheet | done | 681bfa13 | `assets/css/style.css`, `assets/js/scoreboard.js`, `assets/js/game.js`, `assets/js/props.js`, `assets/js/reviews-feed.js` |
+| T5 | Flagged for Review page + footer links + README demo link | done | 681bfa13 | `flagged.html`, footers of `index.html`/`game.html`/`reviews.html`, `README.md` |
+| T6 | Local verification (syntax, link check, server smoke test) | done | 681bfa13 | `tools/restoration-check.mjs` |
+| T7 | Integration: PR to `main`, merge, confirm GitHub Pages deploy | in progress | 681bfa13 | (GitHub) |
 
 Rules honoured from the brief: small frequent commits; `git pull --rebase`
 before every push; never mark anything verified without an official source
@@ -53,3 +53,13 @@ linked; unverified values are left blank and flagged, not inferred.
 - 2026-11-20 — 681bfa13: created board, claimed T1–T4. Upstream repo 404
   (verified via `gh api repos/buffedlizard55-lab/MLB-Live-PBP` and
   `git ls-remote`). Own repo Pages already enabled (legacy, `main`, `/`).
+
+- 2026-11-20 — 681bfa13: T2–T6 done. All 9 missing asset files reconstructed
+  (assets/css/style.css; assets/js/{api,ui,reviews,feed-log,scoreboard,game,
+  props,reviews-feed}.js) plus flagged.html and tools/restoration-check.mjs.
+  Verified: `node tools/restoration-check.mjs` ALL CHECKS PASSED (local refs
+  exist, JS parses, server.mjs health/feed-log round-trip, 10 static routes
+  200). jsdom DOM smoke (stub fetch, verified-shape fixtures): scoreboard,
+  game and replay-feed pages all render with no page JS errors. Official
+  registries re-checked live 2026-11-20: /api/v1/gameStatus (MJ/NJ/M*/N*/IH)
+  and /api/v1/eventTypes (os_ruling_pending_*) — see flagged.html.

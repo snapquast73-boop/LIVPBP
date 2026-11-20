@@ -10,20 +10,26 @@
  *    (runs-at-risk: only runs credited to the very event under review).
  *  - gameData.review (manager counters) and gameData.absChallenges (ABS
  *    counters), read as-is. Pre-ABS seasons have no absChallenges object.
- * The reviewType code glosses (MJ = ABS, MA/MF = manager, NH = boundary) are
- * as documented in README.md from the original project; the upstream
- * verification report (docs/verification-report.md) was not in the upload,
- * so the glosses are flagged unverified in flagged.html (F-004). Unknown
- * codes are displayed raw, never glossed.
+ * Code glosses were verified 2026-11-20 against the API's own registry,
+ * GET /api/v1/gameStatus (https://statsapi.mlb.com/api/v1/gameStatus):
+ * MJ = "Player challenge: Pitch Result", NJ = "Umpire Challenge: Pitch
+ * Result", MA/MF (all M*) = "Manager challenge: …", NH (N*) = "Umpire
+ * review: …" (NH specifically "Umpire review: Home run"), IH = "Instant
+ * Replay". That registry governs statusCode; whether reviewDetails
+ * .reviewType always uses the identical code set could not be confirmed
+ * from a live review payload on 2026-11-20 (off-season, no live games),
+ * so that one mapping is flagged in flagged.html (F-004). Unknown codes
+ * are displayed raw, never glossed.
  */
 (function () {
   'use strict';
 
   var CODE_GLOSS = {
-    MJ: { kind: 'abs', label: 'ABS pitch challenge' },
+    MJ: { kind: 'abs', label: 'ABS pitch challenge (player challenge: pitch result)' },
+    NJ: { kind: 'abs', label: 'ABS pitch challenge (umpire challenge: pitch result)' },
     MA: { kind: 'challenge', label: 'Manager challenge' },
     MF: { kind: 'challenge', label: 'Manager challenge' },
-    NH: { kind: 'boundary', label: 'Boundary call review' }
+    NH: { kind: 'boundary', label: 'Boundary / home-run review (umpire review)' }
   };
 
   function classify(code, inProgress) {
