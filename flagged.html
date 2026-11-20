@@ -220,9 +220,9 @@
         <tr>
           <td>U-5</td>
           <td class="wrap">Stable checkpoint tag <code>v1.0.0-stable-checkpoint</code></td>
-          <td class="wrap">Does not exist in this repository. Nothing was tagged automatically; tag the merged commit if you want the README's revert instruction to work.</td>
-          <td class="wrap">—</td>
-          <td class="status-flag">Flagged</td>
+          <td class="wrap"><strong>Resolved 2026-11-20:</strong> the tag now exists on the verified merge commit <code>5a06fef</code> (PR #7), so the README's <code>git reset --hard v1.0.0-stable-checkpoint</code> instruction works. It was created after this row was written, by the integration session.</td>
+          <td class="wrap"><a href="https://github.com/snapquast73-boop/LIVPBP/releases/tag/v1.0.0-stable-checkpoint" target="_blank" rel="noopener">tag v1.0.0-stable-checkpoint</a></td>
+          <td class="status-ok">Done</td>
         </tr>
         <tr>
           <td>U-6</td>
@@ -342,6 +342,11 @@
     </table>
 
     <h2>6. Preserved irregularity list from the parallel session</h2>
+    <p style="color:var(--muted);font-size:13px">
+      These rows are the earlier session's own list, reproduced unedited, and they describe the
+      build that session shipped. Where the current build changed the facts, the row is answered by
+      the <strong>R-n</strong> status rows at the end of this table — read both together.
+    </p>
     <table class="verify">
       <thead>
         <tr><th>#</th><th>Item</th><th>What was done then</th><th>Source / note</th></tr>
@@ -417,7 +422,7 @@
           <td>R-3</td>
           <td class="wrap">Status of F-006 (that build had only the log5 season core of the hit forecast)</td>
           <td class="wrap"><strong>Addressed:</strong> the forecast now carries all six documented drivers (season, platoon, form, H2H, familiarity, live count); the model's own constants remain flagged (U-2, U-9).</td>
-          <td class="wrap"><a href="https://statsapi.mlb.com/api/v1/people/660271/stats?stats=season,statSplits,gameLog,expectedStatistics&group=hitting&sitCodes=vl,vr" target="_blank" rel="noopener">people/<built-in function id>/stats</a></td>
+          <td class="wrap"><a href="https://statsapi.mlb.com/api/v1/people/660271/stats?stats=season,statSplits,gameLog,expectedStatistics&group=hitting&sitCodes=vl,vr" target="_blank" rel="noopener">people/660271/stats</a></td>
         </tr>
         <tr>
           <td>R-4</td>

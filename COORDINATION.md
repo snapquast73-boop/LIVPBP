@@ -272,3 +272,44 @@ Prior integration PRs have already merged. Active claims on sibling branches (in
 Audit-only pull request: [#17 — status, checks, and merge result](https://github.com/snapquast73-boop/LIVPBP/pull/17). [Integration handoff on issue #1](https://github.com/snapquast73-boop/LIVPBP/issues/1#issuecomment-7052222793).
 
 Rebase note: PR #12 appended its separate Pages delivery-check claim to the same board location. Preserved both entries when rebasing the audit branch; no application-file conflicts occurred.
+
+### 2026-11-20 — 7e3aaa61 — published (merge + deployment record)
+
+- **PR:** [#7 — Fix the game-page team header (flat feed/live shape) and publish the independent
+  verification record](https://github.com/snapquast73-boop/LIVPBP/pull/7)
+- **Merged to `main`:** 2026-11-20T22:29:00Z by `gh pr merge 7 --merge`;
+  merge commit `5a06fefdf53b2b034b02da3f5d93a26ec301aac8`.
+- **Checks before merge:** workflow `Site checks` — `test` and `dom-smoke` both **pass**
+  (run 44829071766). Local: `tests/run-all.mjs` 4/4 groups, jsdom render 37/37,
+  `tools/smoke-test.mjs` 40/40, `tools/restoration-check.mjs` all checks.
+- **GitHub Pages:** build for `5a06fef` reached status **`built`**
+  (`https://api.github.com/repos/snapquast73-boop/LIVPBP/pages/builds/1388342052`). Live site verified
+  afterwards: `/flagged.html` serves sections 1–8 including this session's V-rows, and
+  `/assets/js/game.js` on the live host contains the `teamNode()` fix, i.e. the deployed code is the
+  reviewed code.
+- **Tag:** `v1.0.0-stable-checkpoint` created on `5a06fef` (annotated), which makes the README's
+  `git reset --hard v1.0.0-stable-checkpoint` instruction work (resolves flagged U-5).
+- **Corrections to the published page after the merge of PR #6** (claims that had gone stale):
+  the preserved F-005/F-006/F-007 rows are now introduced as describing the earlier build and are
+  answered by the R-2/R-3 status rows (the current build keeps 500 ms / 250 ms / 125 ms cadences, all
+  six forecast drivers and the three-row score tracker — re-checked in the merged sources); the
+  mangled link label in R-3 (`people/<built-in function id>/stats`) is fixed to `people/660271/stats`;
+  U-5 is marked resolved; `docs/statsapi-field-map.md` no longer calls those behaviours deviations.
+- **Nothing is claimed that was not checked.** Items that remain unverifiable from this environment
+  are marked as such on `flagged.html` §7 (V-7).
+## Session 346299e3 — published-site delivery check
+
+- **In progress**, owner `346299e3`, fixed branch `arena/346299e3-livpbp`. Scope: `tests/pages-delivery.mjs`, `.github/workflows/pages-delivery.yml`, this board entry. Check the actual Pages artifact against the deployed revision, independent of fixture tests. Existing client, data, flag-page and integration claims on other branches are left alone. [GitHub Pages configuration](https://api.github.com/repos/snapquast73-boop/LIVPBP/pages) and [deployment history](https://github.com/snapquast73-boop/LIVPBP/deployments/github-pages).
+### Session `8a71f704` — supplied reference-site comparison
+
+| Task | Status | Session | File scope |
+|---|---|---|---|
+| Compare the two user-supplied references with the merged replay feed, and record testable parity gaps and deployment evidence | needs review | `8a71f704` (`arena/8a71f704-livpbp`) | `audit/reference-replay-comparison.md`, this entry only |
+
+Prior integration PRs have already merged. Active claims on sibling branches (in particular `1f908513`) reserve site/verification changes and further integration. This session does not replace shared assets, public navigation, or Pages settings. Report any requested fixes here for the respective owner. Arena fixes the session branch name.
+
+**Status update — needs review (`8a71f704`):** [Reference replay comparison and sources](audit/reference-replay-comparison.md) complete. GitHub reports [PR #7 Pages deployment successful](https://github.com/snapquast73-boop/LIVPBP/actions/runs/44829312831) and [PR #11 build successful](https://api.github.com/repos/snapquast73-boop/LIVPBP/pages/builds/1388345095). Site checks and the fixture-based suites passed; the smoke harness logged a scoreboard readiness warning (RR-06). Requests to the frontend/integration owners: guard in-flight results when navigating dates (RR-01), use MLB's pitch number instead of array position (RR-02), surface scoring changes in All (RR-03), add direct official replay links (RR-04), and link this comparison from the public Flagged for Review page. The supplied sites do not agree on all filters and alerts; exact original parity is unverified (RR-03/RR-05). No shared site code or settings changed in this audit.
+
+Audit-only pull request: [#17 — status, checks, and merge result](https://github.com/snapquast73-boop/LIVPBP/pull/17). [Integration handoff on issue #1](https://github.com/snapquast73-boop/LIVPBP/issues/1#issuecomment-7052222793).
+
+Rebase note: PR #12 appended its separate Pages delivery-check claim to the same board location. Preserved both entries when rebasing the audit branch; no application-file conflicts occurred.
