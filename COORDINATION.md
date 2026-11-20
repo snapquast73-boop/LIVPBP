@@ -313,3 +313,29 @@ Prior integration PRs have already merged. Active claims on sibling branches (in
 Audit-only pull request: [#17 — status, checks, and merge result](https://github.com/snapquast73-boop/LIVPBP/pull/17). [Integration handoff on issue #1](https://github.com/snapquast73-boop/LIVPBP/issues/1#issuecomment-7052222793).
 
 Rebase note: PR #12 appended its separate Pages delivery-check claim to the same board location. Preserved both entries when rebasing the audit branch; no application-file conflicts occurred.
+
+### 2026-11-20 — 7e3aaa61 — final state (all tasks done)
+
+| Task | Status | Evidence |
+| --- | --- | --- |
+| T1 board + diagnosis | done | this file; flagged I-1/I-2/I-3 |
+| T2–T4 assets (session 681bfa13, then rebuilt by f7276bda, extended by later sessions) | done | `assets/**` on `main`; verified by `tests/` + `tools/smoke-test.mjs` |
+| V1 verification harness | done | `tests/{link-check,contract-check,jsdom-render-test,run-all}.mjs`, `tests/fixtures/**` |
+| V3 verification records | done | `docs/statsapi-field-map.md` (field-by-field, official links), `docs/verification-report.md`, `flagged.html` §1–§8 |
+| V4 integration + publish | done | PR #7 (merge `5a06fef`, Pages `built`) and PR #14 (merge `6a5243b`); tag `v1.0.0-stable-checkpoint` on `5a06fef` |
+| Final re-verification of the combined tree | done | `node tests/run-all.mjs` 4/4 groups · jsdom render 37/37 · `tools/smoke-test.mjs` 40/40 · `tools/restoration-check.mjs` all checks — run against the exact `origin/main` tree, then again after each merge |
+
+- **Live-site check (2026-11-20, after the builds):** `https://snapquast73-boop.github.io/LIVPBP/`
+  serves `/flagged.html` with this session's §7–§8 V-rows and the U-5 resolution, and
+  `/assets/js/game.js` on the live host contains the `teamNode()` fix — the deployed files are the
+  reviewed files, not a stale revision.
+- **Transient Pages errors:** several intermediate `main` commits (0a8e824, 9297edc, 31efd5e, 6a5243b,
+  e7154c0, 65fab417, be2ccb2) show `Page build failed` in the Pages builds API while the queue was
+  processing 7 deployments in ~5 minutes from parallel sessions. The tree itself is clean (no
+  symlinks, no binary/NUL files, no invalid UTF-8, `.nojekyll` present, `tools/smoke-test.mjs` and
+  `tests/` green), and a later build published the current content — verified by fetching the live
+  pages. No action was required beyond waiting; if it recurs, re-trigger with
+  `POST /repos/snapquast73-boop/LIVPBP/pages/builds`.
+- **Nothing is left claimed but unfinished.** Items that could not be verified from this environment
+  stay marked `Unverified` on `flagged.html` (U-1, U-8, U-9, U-10, U-11, V-7) and are never presented
+  as facts anywhere in the app.
