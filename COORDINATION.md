@@ -333,3 +333,20 @@ Official references for this task: [GitHub PR #11](https://github.com/snapquast7
 - Fetched the deployed [scoreboard](https://snapquast73-boop.github.io/LIVPBP/), [Replay Feed](https://snapquast73-boop.github.io/LIVPBP/reviews.html), and [Flagged for Review](https://snapquast73-boop.github.io/LIVPBP/flagged.html); each returned rendered content. On 2026-11-20 (offseason), zero scheduled games and zero replay rows were displayed, not treated as a broken request.
 - The upload lacked the frontend and the README-named upstream source was unavailable; therefore this is a reconstruction, not byte-for-byte source recovery. Known limits remain on the [Flagged for Review page](https://snapquast73-boop.github.io/LIVPBP/flagged.html); this follow-up makes no unverified claims.
 - Follow-up record PR: [#16](https://github.com/snapquast73-boop/LIVPBP/pull/16).
+---
+
+## Session `f132969c` — final functional pass (2026-11-20, branch `arena/f132969c-livpbp`)
+
+Claimed tasks (no other session active; previous sessions' work on `main` @ `5a06fef` preserved unedited except the items below):
+
+| Task | Status | File scope |
+|---|---|---|
+| F132-1 Confirm live site + Pages build for `5a06fef` | done | — (verified via `gh api .../pages/builds/latest` → `built`, and `fetch_page` renders of `/`, `/reviews.html`, `/flagged.html`) |
+| F132-2 Fix `server.mjs` crash + containment (A6/U-3) | done | `server.mjs`, `flagged.html` (U-3 status) |
+| F132-3 Fix README dead runnable refs (`tools/run-risk-preview.html`, `tools/review-test.mjs`, `tools/model-calibration-report.mjs`, `tools/count-model-derivation.mjs`) | done | `README.md` |
+| F132-4 Dedupe `reviews.html` footer Flagged links | done | `reviews.html` |
+| F132-5 Full test suite + official-source re-verification | done | — (40/40 smoke, 37/37 render, gameStatus registry re-fetched live) |
+| F132-6 PR → merge → confirm Pages → tag `v1.0.0-stable-checkpoint` → record here | in progress | repo root |
+
+Merge-conflict note (2026-11-20): rebasing onto `main` @ `9297edc` (PR #12, session `346299e3`) conflicted in `COORDINATION.md` only — both sessions appended at the same spot. Resolved by keeping both entries verbatim; no other session's work discarded. Their `flagged.html`/`scoreboard.js` changes were taken as-is from `main`.
+
