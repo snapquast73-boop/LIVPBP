@@ -2,8 +2,8 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { harness, sourceRows, noOverflow } from './browser-harness.mjs';
-import { fixture, synthetic, root } from './test-context.mjs';
+import { harness, sourceRows, noOverflow } from './independent-browser-harness.mjs';
+import { fixture, synthetic, root } from './independent-fixtures.mjs';
 const app = await harness();
 let assertions = 0;
 try {

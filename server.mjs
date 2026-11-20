@@ -1,163 +1,457 @@
 #!/usr/bin/env node
-/* Optional local/shared persistence. GitHub Pages needs no Node server. */
+/* ============================================================================
+ * server.mjs — HTTP server for MLB Live PBP with persistent feed logging.
+ *
+ * Serves static web assets and provides a shared persistence backend for
+ * reviews, challenges, official-scorer pending rulings, and scoring changes.
+ *
+ * Persisted state lives in data/feed-log-<YYYY-MM-DD>.json so that any
+ * client/browser visiting the website immediately receives all tracked
+ * entries, scoring changes, and baselines across browsers and sessions.
+ * ==========================================================================*/
+
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = path.dirname(fileURLToPath(import.meta.url));
-const MAX_BODY = 2 * 1024 * 1024;
-const MIME = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon' };
-const PAGES = new Set(['index.html', 'game.html', 'reviews.html', 'flagged-for-review.html', '404.html', 'build-info.json']);
-const plain = value => value && typeof value === 'object' && !Array.isArray(value);
-export function validDate(value) {
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const date = new Date(`${value}T12:00:00Z`);
-  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const REPO_DIR = __dirname;
+const DATA_DIR = path.join(REPO_DIR, 'data');
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 8000;
+const HOST = '0.0.0.0';
+
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
 }
-export function normalizeLog(payload, date) {
-  if (!validDate(date)) throw new Error('A valid calendar date is required.');
-  if (!plain(payload) || payload.v !== 1 || payload.date !== date) throw new Error('Invalid observation log.');
-  const log = { v: 1, date, savedAt: Number.isFinite(payload.savedAt) ? payload.savedAt : 0,
-    entries: [], order: [], snapshots: {}, irregularities: {}, grace: {}, settled: [] };
-  log.entries = (Array.isArray(payload.entries) ? payload.entries : []).filter(entry => plain(entry) &&
-    Number.isSafeInteger(entry.gamePk) && entry.gamePk > 0 && plain(entry.review) &&
-    typeof entry.review.id === 'string' && entry.review.id.length < 150 && typeof entry.review.typeKey === 'string' &&
-    Number.isFinite(entry.firstSeen) && Number.isFinite(entry.lastSeen)
-  ).slice(0, 500);
-  for (const field of ['snapshots', 'irregularities', 'grace']) {
-    if (!plain(payload[field])) continue;
-    Object.entries(payload[field]).forEach(([key, value]) => {
-      if (/^\d{1,14}$/.test(key)) log[field][key] = value;
+
+const MIME_TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
+  '.mjs': 'application/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.webp': 'image/webp',
+  '.txt': 'text/plain; charset=utf-8',
+  '.md': 'text/markdown; charset=utf-8',
+};
+
+function sendJSON(res, statusCode, data) {
+  const body = JSON.stringify(data);
+  res.writeHead(statusCode, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Content-Length': Buffer.byteLength(body),
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Accept',
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+  });
+  res.end(body);
+}
+
+function sendError(res, statusCode, message) {
+  sendJSON(res, statusCode, { error: message });
+}
+
+function getLogFilePath(dateStr) {
+  if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return null;
+  return path.join(DATA_DIR, `feed-log-${dateStr}.json`);
+}
+
+function readLogFromDisk(dateStr) {
+  const filePath = getLogFilePath(dateStr);
+  if (!filePath || !fs.existsSync(filePath)) return null;
+  try {
+    const raw = fs.readFileSync(filePath, 'utf8');
+    return JSON.parse(raw);
+  } catch (err) {
+    console.warn(`[server] failed to read feed log for ${dateStr}:`, err);
+    return null;
+  }
+}
+
+/**
+ * Merge an incoming feed log into an existing disk log idempotently.
+ * Preserves all distinct rows, baselines, history chains, and irregularities.
+ */
+function mergeFeedLogPayloads(existing, incoming, dateStr) {
+  const now = Date.now();
+  if (!existing || typeof existing !== 'object' || existing.v !== 1) {
+    return {
+      v: 1,
+      date: dateStr,
+      savedAt: now,
+      entries: Array.isArray(incoming.entries) ? incoming.entries : [],
+      order: Array.isArray(incoming.order) ? incoming.order : [],
+      snapshots: (incoming.snapshots && typeof incoming.snapshots === 'object') ? incoming.snapshots : {},
+      irregularities: (incoming.irregularities && typeof incoming.irregularities === 'object') ? incoming.irregularities : {},
+      grace: (incoming.grace && typeof incoming.grace === 'object') ? incoming.grace : {},
+      settled: Array.isArray(incoming.settled) ? incoming.settled : [],
+    };
+  }
+
+  // Merge entries by key: gamePk:review.id
+  const entryMap = new Map();
+  const orderList = [];
+
+  function makeKey(entry) {
+    if (!entry || !entry.review) return null;
+    return `${entry.gamePk}:${entry.review.id || entry.review.atBatIndex || ''}`;
+  }
+
+  (Array.isArray(existing.entries) ? existing.entries : []).forEach((e) => {
+    const k = makeKey(e);
+    if (!k) return;
+    entryMap.set(k, e);
+    if (!orderList.includes(k)) orderList.push(k);
+  });
+
+  (Array.isArray(incoming.entries) ? incoming.entries : []).forEach((e) => {
+    const k = makeKey(e);
+    if (!k) return;
+    const prev = entryMap.get(k);
+    if (!prev) {
+      entryMap.set(k, e);
+      if (!orderList.includes(k)) orderList.push(k);
+    } else {
+      // Merge: prefer most complete / latest seen
+      const mergedEntry = {
+        gamePk: e.gamePk || prev.gamePk,
+        review: { ...prev.review, ...e.review },
+        firstSeen: Math.min(prev.firstSeen || e.firstSeen || now, e.firstSeen || prev.firstSeen || now),
+        lastSeen: Math.max(prev.lastSeen || 0, e.lastSeen || 0, now),
+        matchupLabel: e.matchupLabel || prev.matchupLabel || null,
+      };
+      // For scoring change: preserve longer history if present
+      if (prev.review && prev.review.history && (!e.review.history || e.review.history.length < prev.review.history.length)) {
+        mergedEntry.review.history = prev.review.history;
+      }
+      entryMap.set(k, mergedEntry);
+    }
+  });
+
+  // Merge snapshots (per gamePk -> atBatIndex)
+  const mergedSnapshots = { ...(existing.snapshots || {}) };
+  if (incoming.snapshots && typeof incoming.snapshots === 'object') {
+    Object.keys(incoming.snapshots).forEach((gamePk) => {
+      mergedSnapshots[gamePk] = {
+        ...(mergedSnapshots[gamePk] || {}),
+        ...(incoming.snapshots[gamePk] || {}),
+      };
     });
   }
-  log.settled = (Array.isArray(payload.settled) ? payload.settled : []).filter(Number.isSafeInteger);
-  return log;
-}
-export function mergeFeedLogPayloads(existing, incoming, date) {
-  const next = normalizeLog(incoming, date);
-  let old;
-  try { old = normalizeLog(existing, date); } catch (_) { old = normalizeLog({ v: 1, date }, date); }
-  const entries = new Map(old.entries.map(entry => [`${entry.gamePk}:${entry.review.id}`, entry]));
-  next.entries.forEach(entry => {
-    const key = `${entry.gamePk}:${entry.review.id}`, previous = entries.get(key);
-    if (!previous || entry.lastSeen > previous.lastSeen) {
-      const merged = { ...entry, firstSeen: previous ? Math.min(previous.firstSeen, entry.firstSeen) : entry.firstSeen };
-      if (previous?.review?.beforeScore && !merged.review.beforeScore) merged.review = { ...merged.review, beforeScore: previous.review.beforeScore };
-      entries.set(key, merged);
-    }
-  });
-  const result = { ...old, savedAt: Math.max(old.savedAt, next.savedAt),
-    entries: [...entries.values()].sort((a, b) => b.firstSeen - a.firstSeen).slice(0, 500),
-    snapshots: next.savedAt > old.savedAt ? { ...old.snapshots, ...next.snapshots } : old.snapshots,
-    grace: { ...old.grace, ...next.grace }, settled: [...new Set([...old.settled, ...next.settled])] };
-  Object.keys(next.irregularities).forEach(key => {
-    result.irregularities[key] = [...new Set([...(Array.isArray(old.irregularities[key]) ? old.irregularities[key] : []), ...(Array.isArray(next.irregularities[key]) ? next.irregularities[key] : [])])].filter(note => typeof note === 'string').slice(-30);
-  });
-  result.order = result.entries.map(entry => `${entry.gamePk}:${entry.review.id}`);
-  return result;
-}
-export function createApp({ root = ROOT, dataDir = process.env.DATA_DIR ?? path.join(ROOT, 'data') } = {}) {
-  fs.mkdirSync(dataDir, { recursive: true });
-  const clients = new Set();
-  function json(res, status, data) {
-    const body = JSON.stringify(data);
-    res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Length': Buffer.byteLength(body), 'Cache-Control': 'no-store' });
-    res.end(body);
-  }
-  function read(date) {
-    try { return normalizeLog(JSON.parse(fs.readFileSync(path.join(dataDir, `feed-log-${date}.json`), 'utf8')), date); }
-    catch (_) { return normalizeLog({ v: 1, date }, date); }
-  }
-  const app = http.createServer((req, res) => {
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('X-MLB-Feed-Log', '1');
-    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    let target, pathname;
-    try {
-      target = new URL(req.url, 'http://localhost');
-      pathname = decodeURIComponent(target.pathname);
-    } catch (_) { json(res, 400, { error: 'Malformed URL' }); return; }
-    // Also serve the repository prefix locally, including deep 404 links.
-    if (pathname.startsWith('/LIVPBP/')) pathname = pathname.slice('/LIVPBP'.length);
-    if (pathname === '/api/health' && ['GET', 'HEAD'].includes(req.method)) {
-      if (req.method === 'HEAD') { res.writeHead(200); res.end(); } else json(res, 200, { status: 'ok' });
-      return;
-    }
-    if (['/api/feed-log', '/api/log', '/api/feed-log/stream'].includes(pathname)) {
-      if (pathname.endsWith('/stream') && req.method === 'GET') {
-        const date = target.searchParams.get('date');
-        if (!validDate(date)) { json(res, 400, { error: 'A valid date=YYYY-MM-DD is required' }); return; }
-        res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache, no-transform', 'X-Accel-Buffering': 'no', Connection: 'keep-alive' });
-        res.write(`retry: 3000\nevent: connected\ndata: ${JSON.stringify({ date })}\n\n`);
-        res.write(`event: feed-log\ndata: ${JSON.stringify(read(date))}\n\n`);
-        const client = { res, date }; clients.add(client);
-        const heartbeat = setInterval(() => { if (!res.destroyed) res.write(': hb\n\n'); }, 20000);
-        heartbeat.unref();
-        res.on('close', () => { clearInterval(heartbeat); clients.delete(client); });
-        return;
-      }
-      if (req.method === 'GET' && !pathname.endsWith('/stream')) {
-        const date = target.searchParams.get('date');
-        if (!validDate(date)) { json(res, 400, { error: 'A valid date=YYYY-MM-DD is required' }); return; }
-        json(res, 200, read(date)); return;
-      }
-      if (req.method !== 'POST' || pathname.endsWith('/stream')) { res.setHeader('Allow', 'GET, POST'); json(res, 405, { error: 'Method not allowed' }); return; }
-      // Same-origin JSON writes only. This optional server is for trusted local/shared use, not public SaaS.
-      if (req.headers.origin) {
-        let origin;
-        try { origin = new URL(req.headers.origin); } catch (_) { json(res, 403, { error: 'Invalid origin' }); return; }
-        if (origin.host !== req.headers.host || !['http:', 'https:'].includes(origin.protocol)) { json(res, 403, { error: 'Cross-origin writes are forbidden' }); return; }
-      }
-      if (!req.headers['content-type']?.toLowerCase().startsWith('application/json')) { json(res, 415, { error: 'JSON content type required' }); return; }
-      let body = '', size = 0, tooLarge = false;
-      req.setEncoding('utf8');
-      req.on('data', chunk => { size += Buffer.byteLength(chunk); if (size > MAX_BODY) tooLarge = true; else body += chunk; });
-      req.on('error', () => { if (!res.headersSent) json(res, 400, { error: 'Incomplete request' }); });
-      req.on('end', () => {
-        if (tooLarge) { json(res, 413, { error: 'Observation log exceeds 2 MB' }); return; }
-        let incoming;
-        try { incoming = JSON.parse(body); normalizeLog(incoming, incoming?.date); }
-        catch (_) { json(res, 400, { error: 'Invalid JSON observation log or calendar date' }); return; }
-        try {
-          const date = incoming.date, merged = mergeFeedLogPayloads(read(date), incoming, date);
-          const destination = path.join(dataDir, `feed-log-${date}.json`);
-          const temporary = `${destination}.tmp`;
-          fs.writeFileSync(temporary, JSON.stringify(merged)); fs.renameSync(temporary, destination);
-          const frame = `event: feed-log\ndata: ${JSON.stringify(merged)}\n\n`;
-          let pushed = 0;
-          for (const client of clients) {
-            if (client.date === date && !client.res.destroyed) { client.res.write(frame); pushed++; }
-          }
-          json(res, 200, { ok: true, date, savedAt: merged.savedAt, entriesCount: merged.entries.length, pushed });
-        } catch (error) { console.error('Observation save failed:', error.message); json(res, 500, { error: 'Observation could not be saved' }); }
+
+  // Merge irregularities (per gamePk -> notes array)
+  const mergedIrregularities = { ...(existing.irregularities || {}) };
+  if (incoming.irregularities && typeof incoming.irregularities === 'object') {
+    Object.keys(incoming.irregularities).forEach((gamePk) => {
+      const prevNotes = mergedIrregularities[gamePk] || [];
+      const newNotes = incoming.irregularities[gamePk] || [];
+      const combined = [...prevNotes];
+      newNotes.forEach((n) => {
+        if (typeof n === 'string' && !combined.includes(n)) combined.push(n);
       });
+      mergedIrregularities[gamePk] = combined.slice(-30);
+    });
+  }
+
+  // Merge grace
+  const mergedGrace = { ...(existing.grace || {}), ...(incoming.grace || {}) };
+
+  // Merge settled
+  const settledSet = new Set([
+    ...(Array.isArray(existing.settled) ? existing.settled : []),
+    ...(Array.isArray(incoming.settled) ? incoming.settled : []),
+  ]);
+
+  return {
+    v: 1,
+    date: dateStr,
+    savedAt: now,
+    entries: orderList.map((k) => entryMap.get(k)).filter(Boolean),
+    order: orderList,
+    snapshots: mergedSnapshots,
+    irregularities: mergedIrregularities,
+    grace: mergedGrace,
+    settled: [...settledSet],
+  };
+}
+
+/* --------------------------------------------------------------- push (SSE)
+ * Live tail of the shared feed log. Polling it (GET /api/feed-log) leaves a
+ * window of up to the poll interval between "another browser/session wrote an
+ * entry" and "this page sees it" — 15s in the shipped client. A Server-Sent
+ * Events stream pushes each accepted write to every connected page
+ * immediately, so the Replay Feed's rows and the scoreboard's scoring-change
+ * chips appear as soon as ANY browser observed them, with no polling at all
+ * (the client keeps its ordinary poll as a fallback when a stream cannot be
+ * established — e.g. the static GitHub Pages deployment, where this endpoint
+ * does not exist).
+ */
+const sseClients = new Set(); // { res, date }
+
+function sseWrite(res, chunk) {
+  try {
+    return res.write(chunk);
+  } catch (_) {
+    return false;
+  }
+}
+
+/** Push one merged log payload to every stream watching that date. */
+function broadcastFeedLog(dateStr, payload) {
+  if (!sseClients.size) return 0;
+  let body;
+  try {
+    body = JSON.stringify(payload);
+  } catch (err) {
+    console.warn(`[server] could not serialize the feed log for push:`, err);
+    return 0;
+  }
+  const frame = `event: feed-log\ndata: ${body}\n\n`;
+  let sent = 0;
+  sseClients.forEach((client) => {
+    if (client.date !== dateStr) return;
+    if (sseWrite(client.res, frame)) sent += 1;
+  });
+  return sent;
+}
+
+function writeLogToDisk(dateStr, payload) {
+  const filePath = getLogFilePath(dateStr);
+  if (!filePath) return false;
+  try {
+    const existing = readLogFromDisk(dateStr);
+    const merged = mergeFeedLogPayloads(existing, payload, dateStr);
+    const serialized = JSON.stringify(merged, null, 2);
+    // Write atomically via temporary file
+    const tempPath = `${filePath}.tmp.${Date.now()}`;
+    fs.writeFileSync(tempPath, serialized, 'utf8');
+    fs.renameSync(tempPath, filePath);
+
+    // Update index
+    const indexPath = path.join(DATA_DIR, 'feed-log-index.json');
+    let index = {};
+    if (fs.existsSync(indexPath)) {
+      try { index = JSON.parse(fs.readFileSync(indexPath, 'utf8')) || {}; } catch (_) {}
+    }
+    index[dateStr] = merged.savedAt;
+    fs.writeFileSync(indexPath, JSON.stringify(index, null, 2), 'utf8');
+    return merged;
+  } catch (err) {
+    console.error(`[server] failed to write feed log for ${dateStr}:`, err);
+    return false;
+  }
+}
+
+const server = http.createServer((req, res) => {
+  // CORS Preflight
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Accept',
+      'Access-Control-Max-Age': '86400',
+    });
+    res.end();
+    return;
+  }
+
+  const reqUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+  const pathname = reqUrl.pathname;
+
+  // --- API Endpoints ---
+
+  // Health check
+  if (pathname === '/api/health') {
+    sendJSON(res, 200, { status: 'ok', uptime: process.uptime() });
+    return;
+  }
+
+  // GET /api/feed-log/stream?date=YYYY-MM-DD — Server-Sent Events tail of the log.
+  if (pathname === '/api/feed-log/stream' && req.method === 'GET') {
+    const dateStr = reqUrl.searchParams.get('date');
+    if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      sendError(res, 400, 'date query parameter in YYYY-MM-DD format is required');
       return;
     }
-    if (!['GET', 'HEAD'].includes(req.method)) { res.setHeader('Allow', 'GET, HEAD'); json(res, 405, { error: 'Method not allowed' }); return; }
-    const relative = pathname === '/' ? 'index.html' : pathname.slice(1);
-    const allowedAsset = /^assets\/(?:css|js)\/[a-zA-Z0-9_.-]+\.(?:css|js|svg|png|jpg|webp|ico)$/.test(relative);
-    const file = path.resolve(root, relative);
-    const allowed = (PAGES.has(relative) || allowedAsset) && file.startsWith(path.resolve(root) + path.sep);
-    let stat;
-    if (allowed) { try { stat = fs.statSync(file); } catch (_) { /* normal 404 */ } }
-    if (!stat?.isFile()) {
-      const notFound = path.join(root, '404.html');
-      const body = fs.existsSync(notFound) ? fs.readFileSync(notFound) : '404 Not Found';
-      res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Length': Buffer.byteLength(body) });
-      res.end(req.method === 'HEAD' ? undefined : body); return;
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      // Proxies (and some dev servers) buffer responses by default; these two
+      // headers ask them not to, so frames are flushed as they are written.
+      'X-Accel-Buffering': 'no',
+      'Access-Control-Allow-Origin': '*',
+    });
+    // Ask the browser's EventSource to reconnect after 3s, and tell the client
+    // the date this stream is for (so a late/duplicate frame is ignorable).
+    sseWrite(res, `retry: 3000\nevent: connected\ndata: {"date":"${dateStr}"}\n\n`);
+    if (typeof res.flushHeaders === 'function') res.flushHeaders();
+    const client = { res, date: dateStr };
+    sseClients.add(client);
+    // Heartbeat: keeps intermediaries from timing the connection out and lets
+    // a dead peer be noticed without waiting for a write.
+    const heartbeat = setInterval(() => { sseWrite(res, ': hb\n\n'); }, 20000);
+    if (typeof heartbeat.unref === 'function') heartbeat.unref();
+    const cleanup = () => {
+      clearInterval(heartbeat);
+      sseClients.delete(client);
+    };
+    req.on('close', cleanup);
+    req.on('error', cleanup);
+    res.on('close', cleanup);
+    // An initial snapshot, so a page that connects while another browser is
+    // active adopts the current log immediately (the client merges it
+    // idempotently, exactly like its ordinary GET).
+    const current = readLogFromDisk(dateStr);
+    if (current) sseWrite(res, `event: feed-log\ndata: ${JSON.stringify(current)}\n\n`);
+    return;
+  }
+
+  // GET /api/feed-log?date=YYYY-MM-DD or /api/log?date=YYYY-MM-DD
+  if ((pathname === '/api/feed-log' || pathname === '/api/log') && req.method === 'GET') {
+    const dateStr = reqUrl.searchParams.get('date');
+    if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      sendError(res, 400, 'date query parameter in YYYY-MM-DD format is required');
+      return;
     }
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] ?? 'application/octet-stream', 'Content-Length': stat.size, 'Cache-Control': 'no-cache' });
-    if (req.method === 'HEAD') res.end();
-    else { const stream = fs.createReadStream(file); stream.on('error', () => res.destroy()); stream.pipe(res); }
+    const log = readLogFromDisk(dateStr);
+    if (log) {
+      sendJSON(res, 200, log);
+    } else {
+      // Return empty valid structure if not yet created on disk
+      sendJSON(res, 200, {
+        v: 1,
+        date: dateStr,
+        savedAt: Date.now(),
+        entries: [],
+        order: [],
+        snapshots: {},
+        irregularities: {},
+        grace: {},
+        settled: [],
+      });
+    }
+    return;
+  }
+
+  // POST /api/feed-log or /api/log
+  if ((pathname === '/api/feed-log' || pathname === '/api/log') && req.method === 'POST') {
+    let body = '';
+    req.setEncoding('utf8');
+    req.on('data', (chunk) => {
+      body += chunk;
+      if (body.length > 50 * 1024 * 1024) { // 50MB protection
+        res.writeHead(413, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Payload too large' }));
+        req.destroy();
+      }
+    });
+    req.on('end', () => {
+      try {
+        const payload = JSON.parse(body);
+        if (!payload || typeof payload !== 'object' || payload.v !== 1 || !payload.date || !/^\d{4}-\d{2}-\d{2}$/.test(payload.date)) {
+          sendError(res, 400, 'Invalid payload: must be object with v: 1 and valid date (YYYY-MM-DD)');
+          return;
+        }
+        const saved = writeLogToDisk(payload.date, payload);
+        if (saved) {
+          // Push the merged log to every open page for this date BEFORE the
+          // POST response: the write is already durable, so another session's
+          // page can show the new entry while this one is still being
+          // acknowledged. (The posting page also receives it; its merge is
+          // idempotent and produces no re-render.)
+          const pushed = broadcastFeedLog(payload.date, saved);
+          sendJSON(res, 200, {
+            ok: true,
+            date: payload.date,
+            savedAt: saved.savedAt,
+            entriesCount: saved.entries.length,
+            pushed,
+          });
+        } else {
+          sendError(res, 500, 'Failed to save feed log to disk');
+        }
+      } catch (err) {
+        sendError(res, 400, `JSON parse error: ${err.message}`);
+      }
+    });
+    return;
+  }
+
+  // --- Static File Serving ---
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    sendError(res, 405, 'Method not allowed');
+    return;
+  }
+
+  let safePath = path.normalize(decodeURIComponent(pathname)).replace(/^(\.\.[\/\\])+/, '');
+  if (safePath === '/' || safePath === '') safePath = '/index.html';
+  if (safePath === '/reviews') safePath = '/reviews.html';
+  if (safePath === '/game') safePath = '/game.html';
+
+  const filePath = path.join(REPO_DIR, safePath);
+
+  // Security check: ensure path is within REPO_DIR
+  if (!filePath.startsWith(REPO_DIR)) {
+    sendError(res, 403, 'Forbidden');
+    return;
+  }
+
+  fs.stat(filePath, (err, stats) => {
+    if (err || !stats.isFile()) {
+      // 404 fallback: if asking for an html page, check 404.html
+      const notFoundPath = path.join(REPO_DIR, '404.html');
+      if (fs.existsSync(notFoundPath)) {
+        res.writeHead(404, {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Access-Control-Allow-Origin': '*',
+        });
+        fs.createReadStream(notFoundPath).pipe(res);
+      } else {
+        res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+        res.end('404 Not Found');
+      }
+      return;
+    }
+
+    const ext = path.extname(filePath).toLowerCase();
+    const contentType = MIME_TYPES[ext] || 'application/octet-stream';
+    res.writeHead(200, {
+      'Content-Type': contentType,
+      'Content-Length': stats.size,
+      'Access-Control-Allow-Origin': '*',
+      'Cache-Control': 'no-cache',
+    });
+
+    if (req.method === 'HEAD') {
+      res.end();
+      return;
+    }
+
+    const stream = fs.createReadStream(filePath);
+    stream.pipe(res);
   });
-  app.on('close', () => { for (const client of clients) client.res.end(); clients.clear(); });
-  return app;
-}
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const port = Number(process.env.PORT ?? 8000);
-  if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error('PORT must be a valid TCP port.');
-  const app = createApp();
-  app.listen(port, '0.0.0.0', () => console.log(`[MLB Live PBP] http://0.0.0.0:${app.address().port}`));
-  for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { app.close(); app.closeAllConnections(); });
-}
+});
+
+server.listen(PORT, HOST, () => {
+  console.log(`[MLB Live PBP Server] listening on http://${HOST}:${PORT}`);
+  console.log(`[MLB Live PBP Server] Serving ${REPO_DIR}`);
+  console.log(`[MLB Live PBP Server] Feed log persistence directory: ${DATA_DIR}`);
+});
+
+process.on('SIGTERM', () => {
+  server.close(() => process.exit(0));
+});
+
+process.on('SIGINT', () => {
+  server.close(() => process.exit(0));
+});

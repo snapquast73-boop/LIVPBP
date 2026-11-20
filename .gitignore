@@ -7,9 +7,11 @@ node_modules/
 .vscode/
 .idea/
 
-# Runtime observations, build output, browser downloads and test artifacts
+# Local server persistence store (runtime data, never committed)
 data/
-_site/
+
+
+# Independent Chromium test artifacts
 .cache/
+_site/
 test-results/
-*.log

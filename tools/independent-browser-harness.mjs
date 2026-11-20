@@ -6,9 +6,9 @@ import { brotliDecompressSync } from 'node:zlib';
 import { execFileSync } from 'node:child_process';
 import { chromium as playwright } from 'playwright-core';
 import chromium from '@sparticuz/chromium';
-import { root } from './test-context.mjs';
+import { root } from './independent-fixtures.mjs';
 export async function harness() {
-  const folder = path.join(root, '_site');
+  const folder = root;
   const server = http.createServer((req, res) => {
     let pathname;
     try { pathname = decodeURIComponent(new URL(req.url, 'http://local.test').pathname); } catch (_) { res.writeHead(400); res.end(); return; }
@@ -38,7 +38,7 @@ export async function harness() {
   return { browser, base: `http://127.0.0.1:${server.address().port}/LIVPBP/`, async close() { await browser.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); } };
 }
 export async function sourceRows(page) {
-  const bad = await page.locator('table tr').evaluateAll(rows => rows.filter(row => ![...row.querySelectorAll('a[href]')].some(link => /https:\/\/(statsapi\.mlb\.com|www\.mlb\.com|github\.com|api\.github\.com|docs\.github\.com)\//.test(link.href))).map(row => row.textContent));
+  const bad = await page.locator('table tbody tr').evaluateAll(rows => rows.filter(row => ![...row.querySelectorAll('a[href]')].some(link => /https:\/\/(statsapi\.mlb\.com|www\.mlb\.com|github\.com|api\.github\.com|docs\.github\.com)\//.test(link.href))).map(row => row.textContent));
   if (bad.length) throw new Error(`Table rows missing official sources: ${JSON.stringify(bad)}`);
 }
 export async function noOverflow(page) {

@@ -1,93 +1,379 @@
-/* MLB's own host is the sole authority for baseball data. No bundled scores. */
-(() => {
+/* ============================================================================
+ * api.js — MLB StatsAPI client
+ *
+ * One place for every network call the site makes:
+ *   1. fetch wrapper with timeout, retry, response cache and HTTP-429 handling
+ *   2. endpoint helpers (schedule, feed/live, playByPlay, gameStatus, people stats)
+ *   3. small date/number formatters shared by the pages
+ *
+ * The StatsAPI is keyless and sends CORS headers, so a static GitHub Pages site
+ * can call it straight from the browser.  Endpoint list + `fields` projections
+ * follow the ones documented in README.md §"How it works".
+ * ==========================================================================*/
+(function (global) {
   'use strict';
-  const ROOT = 'https://statsapi.mlb.com';
-  const pending = new Map();
-  let quietUntil = 0;
 
-  class APIError extends Error {
-    constructor(message, status = 0) { super(message); this.name = 'APIError'; this.status = status; }
-  }
-  function date(value) {
-    if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-    const parsed = new Date(`${value}T12:00:00Z`);
-    return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
-  }
-  function id(value) {
-    if (!/^\d+$/.test(String(value)) || !Number.isSafeInteger(Number(value)) || Number(value) < 1) {
-      throw new APIError('A valid MLB identifier is required.');
-    }
-    return String(Number(value));
-  }
-  function url(path, params = {}) {
-    const target = new URL(path, ROOT);
-    if (target.origin !== ROOT) throw new APIError('Only official MLB endpoints are allowed.');
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null) target.searchParams.set(key, String(value));
-    });
-    return target.href;
-  }
-  function retryAfter(value, now = Date.now()) {
-    const seconds = value === null || value === '' ? NaN : Number(value);
-    const delay = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(value) - now;
-    return Math.max(1000, Math.min(300000, Number.isFinite(delay) ? delay : 60000));
-  }
-  async function request(target) {
-    if (Date.now() < quietUntil) throw new APIError('MLB requested a pause. Retrying after its rate-limit cooldown.', 429);
-    if (pending.has(target)) return pending.get(target);
-    const job = (async () => {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 15000);
-      try {
-        const response = await fetch(target, { signal: controller.signal, headers: { Accept: 'application/json' } });
-        if (response.status === 429) quietUntil = Date.now() + retryAfter(response.headers.get('Retry-After'));
-        if (!response.ok) throw new APIError(`MLB data request failed (HTTP ${response.status}).`, response.status);
-        const payload = await response.json();
-        if (!payload || typeof payload !== 'object') throw new APIError('MLB returned an invalid response.');
-        return payload;
-      } catch (error) {
-        if (error instanceof APIError) throw error;
-        throw new APIError(error.name === 'AbortError'
-          ? 'MLB took too long to respond. Please retry.'
-          : 'Unable to load official MLB data. Check your connection or retry.');
-      } finally { clearTimeout(timer); }
-    })();
-    pending.set(target, job);
-    try { return await job; } finally { pending.delete(target); }
-  }
-  const scheduleURL = selectedDate => {
-    if (!date(selectedDate)) throw new APIError('Choose a valid calendar date.');
-    return url('/api/v1/schedule', { sportId: 1, date: selectedDate, hydrate: 'probablePitcher,linescore,decisions,review' });
+  /* 1 = MLB. 11-14 = the minor leagues (see README §Customizing). */
+  var SPORT_ID = 1;
+  var API_ROOT = 'https://statsapi.mlb.com/api';
+  var REQUEST_TIMEOUT_MS = 15000;
+
+  /* HTTP 429 quiet period: honour Retry-After when the host sends one, else 60s.
+   * Clamped to 1s-5min so a bogus header can neither spin nor stall the page. */
+  var QUIET_DEFAULT_MS = 60000;
+  var QUIET_MIN_MS = 1000;
+  var QUIET_MAX_MS = 300000;
+
+  var state = {
+    quietUntil: 0,
+    lastError: null,
+    lastOK: 0,
+    requests: 0,
+    cacheHits: 0,
   };
-  const gameURL = gamePk => url(`/api/v1.1/game/${id(gamePk)}/feed/live`);
-  async function live(gamePk, fields) {
-    const params = fields ? { fields } : {};
-    try { return await request(url(`/api/v1.1/game/${id(gamePk)}/feed/live`, params)); }
-    catch (error) {
-      if (error.status !== 404) throw error;
-      return request(url(`/api/v1/game/${id(gamePk)}/feed/live`, params));
+
+  var cache = Object.create(null);
+  var CACHE_MAX_ENTRIES = 240;
+
+  function now() { return Date.now(); }
+
+  function sleep(ms) {
+    return new Promise(function (resolve) { setTimeout(resolve, ms); });
+  }
+
+  function quietRemainingMs() { return Math.max(0, state.quietUntil - now()); }
+
+  function parseRetryAfter(value) {
+    if (!value) return 0;
+    var seconds = Number(value);
+    if (isFinite(seconds) && seconds >= 0) return Math.round(seconds * 1000);
+    var when = Date.parse(value); // HTTP-date form
+    if (!isNaN(when)) return Math.max(0, when - now());
+    return 0;
+  }
+
+  function pruneCache() {
+    var keys = Object.keys(cache);
+    if (keys.length <= CACHE_MAX_ENTRIES) return;
+    keys.sort(function (a, b) { return cache[a].at - cache[b].at; });
+    keys.slice(0, keys.length - CACHE_MAX_ENTRIES).forEach(function (k) { delete cache[k]; });
+  }
+
+  function ApiError(message, status, url) {
+    var err = new Error(message);
+    err.name = 'ApiError';
+    err.status = status || 0;
+    err.url = url || '';
+    return err;
+  }
+
+  /**
+   * getJSON(url, opts)
+   *   opts.ttl      cache lifetime in ms (0 = no cache, the default)
+   *   opts.retries  extra attempts after a failed one (default 1)
+   *   opts.signal   external AbortSignal (poll loops use it to cancel)
+   *   opts.keepQuiet  bypass the 429 quiet window (used by the quiet probe only)
+   */
+  function getJSON(url, opts) {
+    opts = opts || {};
+    var ttl = opts.ttl || 0;
+    var retries = typeof opts.retries === 'number' ? opts.retries : 1;
+
+    if (ttl && cache[url] && now() - cache[url].at < cache[url].ttl) {
+      state.cacheHits += 1;
+      return Promise.resolve(cache[url].data);
     }
+
+    var quiet = quietRemainingMs();
+    if (quiet > 0 && !opts.keepQuiet) {
+      var qerr = ApiError('StatsAPI quiet period, ' + Math.ceil(quiet / 1000) + 's remaining', 429, url);
+      qerr.quiet = true;
+      return Promise.reject(qerr);
+    }
+
+    var attempt = 0;
+
+    function once() {
+      attempt += 1;
+      state.requests += 1;
+
+      var controller = new AbortController();
+      var timer = setTimeout(function () { controller.abort(); }, REQUEST_TIMEOUT_MS);
+      var external = opts.signal;
+      if (external) {
+        if (external.aborted) controller.abort();
+        else external.addEventListener('abort', function () { controller.abort(); }, { once: true });
+      }
+
+      var request = fetch(url, {
+        method: 'GET',
+        mode: 'cors',
+        cache: 'no-store',
+        credentials: 'omit',
+        headers: { Accept: 'application/json' },
+        signal: controller.signal,
+      });
+
+      return request.then(function (res) {
+        clearTimeout(timer);
+
+        if (res.status === 429) {
+          var wait = parseRetryAfter(res.headers.get('Retry-After')) || QUIET_DEFAULT_MS;
+          wait = Math.min(QUIET_MAX_MS, Math.max(QUIET_MIN_MS, wait));
+          state.quietUntil = Math.max(state.quietUntil, now() + wait);
+          throw ApiError('StatsAPI asked to slow down (HTTP 429); pausing ' + Math.round(wait / 1000) + 's', 429, url);
+        }
+        if (!res.ok) throw ApiError('HTTP ' + res.status + ' from ' + url, res.status, url);
+        return res.json();
+      }).then(function (data) {
+        clearTimeout(timer);
+        state.lastOK = now();
+        state.lastError = null;
+        if (ttl) {
+          cache[url] = { at: now(), ttl: ttl, data: data };
+          pruneCache();
+        }
+        return data;
+      }).catch(function (err) {
+        clearTimeout(timer);
+        state.lastError = err;
+
+        var status = err && err.status;
+        var retryable = !status || status >= 500 || err.name === 'AbortError' || err.name === 'TypeError';
+        if (retryable && attempt <= retries) {
+          return sleep(300 * attempt).then(once);
+        }
+        if (err.name === 'AbortError') {
+          throw ApiError('Request timed out after ' + REQUEST_TIMEOUT_MS + 'ms: ' + url, 0, url);
+        }
+        throw err;
+      });
+    }
+
+    return once();
   }
-  // Include every property consumed by the replay parser; exclude player rosters and pitch telemetry.
-  const REPLAY_FIELDS = [
-    'gamePk,gameData,game,pk,season,datetime,officialDate,status,abstractGameState,detailedState,statusCode,reason',
-    'teams,away,home,id,name,abbreviation,review,used,remaining,absChallenges,usedSuccessful,usedFailed',
-    'liveData,linescore,runs,hits,errors,plays,allPlays,currentPlay,atBatIndex,about,inning,halfInning',
-    'isComplete,startTime,endTime,hasReview,result,event,eventType,description,awayScore,homeScore,isOut,rbi',
-    'matchup,batter,pitcher,fullName,playEvents,index,isPitch,details,reviewDetails,reviewType,challengeTeamId',
-    'inProgress,isOverturned,count,balls,strikes,outs,runners,movement,runner,isScoringEvent,playIndex'
-  ].join(',');
-  function statsURL(playerId, group, season) {
-    if (!['hitting', 'pitching'].includes(group) || !/^\d{4}$/.test(String(season))) throw new APIError('Invalid statistics request.');
-    return url(`/api/v1/people/${id(playerId)}/stats`, { stats: 'season', group, season });
+
+  /* ------------------------------------------------------------- endpoints */
+
+  var SCHEDULE_HYDRATE = 'probablePitcher,linescore,decisions,review';
+
+  /* Games for one date.  `fields` is deliberately open so the scoreboard can
+   * ask for the full hydrated card data and the 125ms sweep can ask for the
+   * lean status projection (README table, rows 1 and 2). */
+  function scheduleUrl(date, opts) {
+    opts = opts || {};
+    var qs = ['sportId=' + SPORT_ID, 'date=' + encodeURIComponent(date)];
+    if (opts.hydrate) qs.push('hydrate=' + encodeURIComponent(opts.hydrate));
+    if (opts.fields) qs.push('fields=' + encodeURIComponent(opts.fields));
+    return API_ROOT + '/v1/schedule?' + qs.join('&');
   }
-  window.MLB = Object.freeze({
-    ROOT, APIError, url, id, validDate: date, retryAfter, scheduleURL, gameURL, statsURL, REPLAY_FIELDS,
-    get: (path, params) => request(url(path, params)),
-    schedule: selectedDate => request(scheduleURL(selectedDate)),
-    live, replay: gamePk => live(gamePk, REPLAY_FIELDS),
-    registry: () => request(url('/api/v1/gameStatus')),
-    stats: (playerId, group, season) => request(statsURL(playerId, group, season)),
-    cooldown: () => Math.max(0, quietUntil - Date.now())
-  });
-})();
+
+  function schedule(date, opts) {
+    opts = opts || {};
+    return getJSON(scheduleUrl(date, {
+      hydrate: opts.hydrate === undefined ? SCHEDULE_HYDRATE : opts.hydrate,
+      fields: opts.fields || '',
+    }), { ttl: opts.ttl || 0, signal: opts.signal, retries: opts.retries });
+  }
+
+  /* Date-range game counts — used only to point at the most recent date that
+   * actually had games (the scoreboard looks empty in the offseason). */
+  function scheduleRange(startDate, endDate, opts) {
+    opts = opts || {};
+    var qs = 'sportId=' + SPORT_ID + '&startDate=' + encodeURIComponent(startDate) +
+      '&endDate=' + encodeURIComponent(endDate) + '&fields=dates,date,totalGames';
+    return getJSON(API_ROOT + '/v1/schedule?' + qs, { ttl: 300000, retries: 0, signal: opts.signal });
+  }
+
+  /* Lean slate status sweep: gamePk + status only (~2.4 KB for the whole day). */
+  var STATUS_FIELDS = 'dates,games,gamePk,season,status,abstractGameState,codedGameState,' +
+    'detailedState,statusCode,reason,startTimeTBD,abstractGameCode';
+
+  function slateStatus(date, opts) {
+    opts = opts || {};
+    return schedule(date, {
+      hydrate: '',
+      fields: STATUS_FIELDS,
+      ttl: opts.ttl === undefined ? 0 : opts.ttl,
+      signal: opts.signal,
+      retries: 0,
+    });
+  }
+
+  /* Full live feed (v1.1 first, v1 as the documented fallback). */
+  function gameFeed(gamePk, opts) {
+    opts = opts || {};
+    var url = API_ROOT + '/v1.1/game/' + gamePk + '/feed/live';
+    return getJSON(url, { signal: opts.signal, retries: opts.retries })
+      .catch(function (err) {
+        if (err && err.status === 404) {
+          return getJSON(API_ROOT + '/v1/game/' + gamePk + '/feed/live', { signal: opts.signal });
+        }
+        throw err;
+      });
+  }
+
+  /* Lean per-game status projection for the game page's 125ms watcher (~150 B). */
+  function gameStatusLean(gamePk, opts) {
+    opts = opts || {};
+    var fields = 'gameData,status,abstractGameState,codedGameState,detailedState,statusCode,reason,startTimeTBD,abstractGameCode';
+    return getJSON(API_ROOT + '/v1.1/game/' + gamePk + '/feed/live?fields=' + encodeURIComponent(fields), {
+      signal: opts.signal, retries: 0,
+    });
+  }
+
+  function playByPlay(gamePk, opts) {
+    opts = opts || {};
+    var url = API_ROOT + '/v1/game/' + gamePk + '/playByPlay';
+    if (opts.fields) url += '?fields=' + encodeURIComponent(opts.fields);
+    return getJSON(url, { signal: opts.signal, retries: opts.retries });
+  }
+
+  function boxscore(gamePk, opts) {
+    opts = opts || {};
+    return getJSON(API_ROOT + '/v1/game/' + gamePk + '/boxscore', { signal: opts.signal, retries: 0 });
+  }
+
+  function linescore(gamePk, opts) {
+    opts = opts || {};
+    return getJSON(API_ROOT + '/v1/game/' + gamePk + '/linescore', { signal: opts.signal, retries: 0 });
+  }
+
+  /* Official game-status / review-type registry (codes -> official wording).
+   * Cached for an hour: it is a static reference table. */
+  function gameStatusRegistry(opts) {
+    opts = opts || {};
+    return getJSON(API_ROOT + '/v1/gameStatus', { ttl: 3600000, retries: 0, signal: opts.signal })
+      .then(function (rows) {
+        var byCode = Object.create(null);
+        (Array.isArray(rows) ? rows : []).forEach(function (row) {
+          if (row && row.statusCode) byCode[row.statusCode] = row;
+        });
+        return byCode;
+      });
+  }
+
+  function peopleStats(personId, group, opts) {
+    opts = opts || {};
+    var stats = opts.stats || 'season,statSplits,gameLog,expectedStatistics';
+    var season = opts.season || new Date().getUTCFullYear();
+    var qs = 'stats=' + encodeURIComponent(stats) + '&group=' + encodeURIComponent(group) +
+      '&season=' + encodeURIComponent(season);
+    if (opts.sitCodes) qs += '&sitCodes=' + encodeURIComponent(opts.sitCodes);
+    return getJSON(API_ROOT + '/v1/people/' + personId + '/stats?' + qs, {
+      ttl: opts.ttl === undefined ? 120000 : opts.ttl,
+      signal: opts.signal, retries: 0,
+    });
+  }
+
+  function vsPlayer(batterId, pitcherId, group, opts) {
+    opts = opts || {};
+    var qs = 'stats=vsPlayer&group=' + encodeURIComponent(group || 'hitting') +
+      '&opposingPlayerId=' + encodeURIComponent(pitcherId);
+    return getJSON(API_ROOT + '/v1/people/' + batterId + '/stats?' + qs, {
+      ttl: opts.ttl === undefined ? 600000 : opts.ttl,
+      signal: opts.signal, retries: 0,
+    });
+  }
+
+  /* ------------------------------------------------------------ formatters */
+
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+
+  /* Local calendar date as YYYY-MM-DD (no UTC shift surprises). */
+  function toISODate(d) {
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+  }
+
+  function todayISO() { return toISODate(new Date()); }
+
+  function shiftISODate(dateStr, deltaDays) {
+    var parts = String(dateStr || '').split('-');
+    if (parts.length !== 3) return todayISO();
+    var d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    d.setDate(d.getDate() + deltaDays);
+    return toISODate(d);
+  }
+
+  function isValidISODate(s) { return /^\d{4}-\d{2}-\d{2}$/.test(String(s || '')); }
+
+  function formatDateLabel(dateStr) {
+    if (!isValidISODate(dateStr)) return '';
+    var p = dateStr.split('-');
+    var d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+    var weekday = d.toLocaleDateString(undefined, { weekday: 'short' });
+    var month = d.toLocaleDateString(undefined, { month: 'short' });
+    return weekday + ' ' + month + ' ' + d.getDate() + ', ' + d.getFullYear();
+  }
+
+  function formatGameTime(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  }
+
+  function formatClock(ms) {
+    var s = Math.max(0, Math.round(ms / 1000));
+    if (s < 60) return s + 's';
+    var m = Math.floor(s / 60);
+    return m + 'm ' + pad2(s % 60) + 's';
+  }
+
+  /* Baseball-style average: ".312" (leading zero dropped) or "—" when absent. */
+  function avg3(value) {
+    var n = Number(value);
+    if (value === null || value === undefined || value === '' || !isFinite(n)) return '—';
+    var s = n.toFixed(3);
+    return s.replace(/^0/, '');
+  }
+
+  function pct(value, digits) {
+    var n = Number(value);
+    if (value === null || value === undefined || value === '' || !isFinite(n)) return '—';
+    return (n * 100).toFixed(digits === undefined ? 0 : digits) + '%';
+  }
+
+  function ipText(value) {
+    var raw = String(value === undefined || value === null ? '' : value);
+    if (!raw) return '—';
+    return raw;
+  }
+
+  function num(value, fallback) {
+    var n = Number(value);
+    return isFinite(n) ? n : (fallback === undefined ? 0 : fallback);
+  }
+
+  global.MLB = {
+    SPORT_ID: SPORT_ID,
+    API_ROOT: API_ROOT,
+    STATUS_FIELDS: STATUS_FIELDS,
+    SCHEDULE_HYDRATE: SCHEDULE_HYDRATE,
+    getJSON: getJSON,
+    schedule: schedule,
+    scheduleRange: scheduleRange,
+    slateStatus: slateStatus,
+    gameFeed: gameFeed,
+    gameStatusLean: gameStatusLean,
+    playByPlay: playByPlay,
+    boxscore: boxscore,
+    linescore: linescore,
+    gameStatusRegistry: gameStatusRegistry,
+    peopleStats: peopleStats,
+    vsPlayer: vsPlayer,
+    quietRemainingMs: quietRemainingMs,
+    state: state,
+    toISODate: toISODate,
+    todayISO: todayISO,
+    shiftISODate: shiftISODate,
+    isValidISODate: isValidISODate,
+    formatDateLabel: formatDateLabel,
+    formatGameTime: formatGameTime,
+    formatClock: formatClock,
+    avg3: avg3,
+    pct: pct,
+    ipText: ipText,
+    num: num,
+  };
+}(window));

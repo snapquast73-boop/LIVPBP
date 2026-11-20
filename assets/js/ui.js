@@ -1,123 +1,197 @@
-/* Shared, escaped rendering and non-overlapping, visibility-aware polling. */
-(() => {
+/* ============================================================================
+ * ui.js — shared presentation helpers
+ *
+ *   UI.esc / UI.attr          HTML escaping
+ *   UI.teamLogo / UI.headshot <img> with a graceful initials fallback
+ *   UI.TEAM_ABBR              official StatsAPI abbreviations (verified below)
+ *   UI.TEAM_COLORS            approximate club palette (visual only)
+ *   UI.countDots / UI.outsDots / UI.baseDiamond
+ *   UI.statusMeta             official status -> {label, cls, live}
+ *   UI.cardChips              review / scoring-change chips for a game card
+ * ==========================================================================*/
+(function (global) {
   'use strict';
-  const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
-  const reported = value => (typeof value === 'number' && Number.isFinite(value)) ||
-    (typeof value === 'string' && value.trim() !== '' && !['--', '-.--', '.---', 'NaN'].includes(value));
-  const value = input => reported(input) ? escape(input) : '';
-  const cell = input => reported(input) ? `<td>${value(input)}</td>` : '<td class="unverified" data-unverified="true" title="Not reported by MLB — unverified" aria-label="Not reported by MLB — unverified"></td>';
-  function source(target, label = 'Official MLB source') {
-    const checked = new URL(target);
-    if (checked.protocol !== 'https:' || !['statsapi.mlb.com', 'www.mlb.com', 'www.mlbstatic.com', 'img.mlbstatic.com', 'docs.github.com', 'github.com', 'api.github.com'].includes(checked.hostname)) {
-      throw new Error('An official source link is required.');
+
+  var LOGO_BASE = 'https://www.mlbstatic.com/team-logos/team-cap-on-dark/';
+  var HEADSHOT_BASE = 'https://img.mlbstatic.com/mlb-photos/image/upload/' +
+    'd_people:generic:headshot:67:current.png/w_120,q_auto:best/v1/people/';
+
+  /* Official abbreviations, read from GET /api/v1/teams?sportId=1
+   * (verified 2026-11-20 — see docs/verification-report.md row T-2). */
+  var TEAM_ABBR = {
+    108: 'LAA', 109: 'AZ', 110: 'BAL', 111: 'BOS', 112: 'CHC', 113: 'CIN', 114: 'CLE', 115: 'COL',
+    116: 'DET', 117: 'HOU', 118: 'KC', 119: 'LAD', 120: 'WSH', 121: 'NYM', 133: 'ATH', 134: 'PIT',
+    135: 'SD', 136: 'SEA', 137: 'SF', 138: 'STL', 139: 'TB', 140: 'TEX', 141: 'TOR', 142: 'MIN',
+    143: 'PHI', 144: 'ATL', 145: 'CWS', 146: 'MIA', 147: 'NYY', 158: 'MIL',
+  };
+
+  /* Approximate club palette — presentation only, NOT an official source.
+   * Flagged for review on flagged.html (U-1). */
+  var TEAM_COLORS = {
+    108: '#ba0021', 109: '#a71930', 110: '#df4601', 111: '#bd3039', 112: '#0e3386',
+    113: '#c6011f', 114: '#00385d', 115: '#33006f', 116: '#0c2340', 117: '#eb6e1f',
+    118: '#004687', 119: '#005a9c', 120: '#ab0003', 121: '#002d72', 133: '#003831',
+    134: '#fdb827', 135: '#2f241d', 136: '#0c2c56', 137: '#fd5a1e', 138: '#c41e3a',
+    139: '#092c5c', 140: '#003278', 141: '#134a8e', 142: '#002b5c', 143: '#e81828',
+    144: '#ce1141', 145: '#27251f', 146: '#00a3e0', 147: '#0c2340', 158: '#12284b',
+  };
+
+  function esc(value) {
+    return String(value === null || value === undefined ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function teamId(team) {
+    if (!team) return null;
+    if (typeof team === 'number') return team;
+    if (team.team && team.team.id) return Number(team.team.id);
+    return team.id ? Number(team.id) : null;
+  }
+
+  function teamName(team) {
+    if (!team) return '';
+    if (team.team) return team.team.name || team.team.teamName || '';
+    return team.name || team.teamName || '';
+  }
+
+  function abbr(team) {
+    var id = teamId(team);
+    if (!id) return '';
+    if (TEAM_ABBR[id]) return TEAM_ABBR[id];
+    var name = teamName(team);
+    return name ? name.replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase() : '';
+  }
+
+  function initials(name) {
+    var parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+    if (!parts.length) return '?';
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }
+
+  /* Logo with an initials fallback if the CDN image is missing. */
+  function teamLogo(team, cls) {
+    var id = teamId(team);
+    var klass = cls || 'team-logo';
+    if (!id) return '<span class="team-logo-fallback">' + esc(abbr(team)) + '</span>';
+    return '<img class="' + klass + '" loading="lazy" alt="' + esc(abbr(team)) + '"' +
+      ' src="' + LOGO_BASE + id + '.svg"' +
+      ' onerror="this.replaceWith(Object.assign(document.createElement(\'span\'),' +
+      '{className:\'team-logo-fallback\',textContent:\'' + esc(abbr(team)) + '\'}))">';
+  }
+
+  function headshot(personId, name) {
+    if (!personId) return '<span class="headshot-fallback">' + esc(initials(name)) + '</span>';
+    var ini = esc(initials(name));
+    return '<img class="headshot" loading="lazy" alt="" src="' + HEADSHOT_BASE + encodeURIComponent(personId) +
+      '/headshot/67/current"' +
+      ' onerror="this.replaceWith(Object.assign(document.createElement(\'span\'),' +
+      '{className:\'headshot-fallback\',textContent:\'' + ini + '\'}))">';
+  }
+
+  function dots(filled, total, cls) {
+    var out = '';
+    for (var i = 0; i < total; i += 1) {
+      out += '<span class="dot' + (i < filled ? ' ' + cls : '') + '"></span>';
     }
-    return `<a class="source-link" href="${escape(checked.href)}" target="_blank" rel="noopener noreferrer">${escape(label)} ↗</a>`;
+    return out;
   }
-  function table(caption, headers, rows, target) {
-    return `<div class="table-scroll"><table><caption>${escape(caption)}</caption><thead><tr>${headers.map(h => `<th scope="col">${escape(h)}</th>`).join('')}<th scope="col">${source(target, 'Source')}</th></tr></thead><tbody>${rows.map(row => `<tr>${row.join('')}<td>${source(target, 'MLB')}</td></tr>`).join('')}</tbody></table></div>`;
+
+  function countDots(balls, strikes) {
+    return '<span class="count-block">' +
+      '<span class="count-group"><span class="count-label">B</span>' + dots(Number(balls) || 0, 3, 'on-ball') + '</span>' +
+      '<span class="count-group"><span class="count-label">S</span>' + dots(Number(strikes) || 0, 2, 'on-strike') + '</span>' +
+      '</span>';
   }
-  function logo(team) {
-    if (!Number.isSafeInteger(team?.id) || team.id < 1) return '';
-    return `<img class="team-logo" src="https://www.mlbstatic.com/team-logos/team-cap-on-dark/${team.id}.svg" alt="" loading="lazy" width="40" height="40" onerror="this.hidden=true">`;
+
+  function outsDots(outs) {
+    return '<span class="count-group"><span class="count-label">OUT</span>' + dots(Number(outs) || 0, 3, 'on-out') + '</span>';
   }
-  const teamName = team => escape(team?.name ?? 'Team name not reported');
-  const shortName = team => escape(team?.abbreviation ?? team?.name ?? '');
-  const record = input => reported(input?.wins) && reported(input?.losses) ? `${value(input.wins)}–${value(input.losses)}` : '';
-  function localDate(now = new Date()) {
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+  /* occupied: { first: bool, second: bool, third: bool, scoring: bool } */
+  function baseDiamond(occupied) {
+    var o = occupied || {};
+    function cls(on) { return on ? ' class="on"' : ''; }
+    return '<span class="base-diamond" title="Runners on base">' +
+      '<i data-base="2B"' + cls(o.second) + '></i>' +
+      '<i data-base="3B"' + cls(o.third) + '></i>' +
+      '<i data-base="1B"' + cls(o.first) + '></i>' +
+      '<i data-base="score"' + cls(o.scoring) + '></i>' +
+      '</span>';
   }
-  function selectedDate() {
-    const input = new URLSearchParams(location.search).get('date');
-    return MLB.validDate(input) ? input : localDate();
-  }
-  function shiftDate(input, days) {
-    if (!MLB.validDate(input)) return localDate();
-    const next = new Date(`${input}T12:00:00Z`);
-    next.setUTCDate(next.getUTCDate() + days);
-    return next.toISOString().slice(0, 10);
-  }
-  const dateLabel = input => new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${input}T12:00:00Z`));
-  function time(input) {
-    const date = new Date(input);
-    return Number.isFinite(date.getTime()) ? escape(new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }).format(date)) : '';
-  }
-  function gameHref(gamePk, date) { return `game.html?gamePk=${MLB.id(gamePk)}${MLB.validDate(date) ? `&date=${date}` : ''}`; }
-  function state(status) {
-    if (status?.abstractGameState === 'Live') return 'live';
-    if (status?.abstractGameState === 'Final') return 'final';
-    if (status?.abstractGameState === 'Preview') return 'preview';
-    return 'unknown';
-  }
-  function status(status, linescore) {
-    let text = escape(status?.detailedState ?? 'Status not reported');
-    if (state(status) === 'live' && reported(linescore?.currentInning)) {
-      text += ` · ${escape(linescore.inningState ?? '')} ${value(linescore.currentInningOrdinal ?? linescore.currentInning)}`;
+
+  /* Runners from a live feed's linescore. */
+  function occupancyFromLinescore(linescore) {
+    var off = (linescore && linescore.offense) || {};
+    var isTop = !!(linescore && linescore.isTopInning);
+    var battingHome = !isTop;
+    function on(baseSide) {
+      var runner = off[baseSide];
+      if (!runner) return false;
+      if (runner.id) return true;
+      return false;
     }
-    return `<span class="game-state state-${state(status)}">${state(status) === 'live' ? '<span class="live-dot"></span>' : ''}${text}</span>`;
+    return {
+      first: on('first'),
+      second: on('second'),
+      third: on('third'),
+      scoring: false,
+      battingHome: battingHome,
+    };
   }
-  function bases(linescore) {
-    const offense = linescore?.offense;
-    if (!offense) return '<span class="muted">Runners not reported — unverified</span>';
-    return `<div class="base-state" aria-label="Official baserunners">${['first', 'second', 'third'].map((base, i) => `<span class="base${offense[base] ? ' occupied' : ''}" title="${i + 1}: ${escape(offense[base]?.fullName ?? 'No runner reported')}">${i + 1}</span>`).join('')}</div>`;
-  }
-  function error(target, error, retry = '') {
-    target.innerHTML = `<div class="empty-state error-state" role="alert"><h2>Official data unavailable</h2><p>${escape(error.message)}</p>${retry}<p>No scores or statistics have been substituted. <a href="flagged-for-review.html#data">Verification policy</a></p></div>`;
-  }
-  function setBanner(message = '', kind = '') {
-    const banner = document.getElementById('banner');
-    if (!banner) return;
-    banner.innerHTML = message;
-    banner.className = `banner ${message ? `banner-visible ${kind}` : ''}`;
-  }
-  function setStatus(message) {
-    const line = document.getElementById('status-line');
-    if (line) line.textContent = message;
-  }
-  function dateControls(owner, getDate, setDate) {
-    const picker = document.getElementById('date-picker');
-    function apply(next) {
-      if (!MLB.validDate(next)) { picker.value = getDate(); return; }
-      picker.value = next;
-      const label = document.getElementById('date-label');
-      if (label) label.textContent = dateLabel(next);
-      const target = new URL(location.href);
-      target.searchParams.set('date', next);
-      history.replaceState(null, '', target);
-      document.querySelectorAll('[data-date-link]').forEach(link => { link.href = `${link.dataset.dateLink}?date=${next}`; });
-      setDate(next);
+
+  /* Official status -> label + class.  Review states come from the StatsAPI's
+   * own registry (the M and N families, plus IH); see docs/verification-report.md. */
+  function statusMeta(status) {
+    var s = status || {};
+    var code = s.statusCode || '';
+    var abstractState = s.abstractGameState || '';
+    var detailed = s.detailedState || '';
+    var isReview = /^[MN]/.test(code) || code === 'IH';
+    var label = detailed || abstractState || '—';
+    var cls = 'preview';
+    if (abstractState === 'Live' || abstractState === 'Final') {
+      cls = abstractState === 'Live' ? 'live' : 'final';
+    } else if (abstractState === 'Preview') {
+      cls = 'preview';
     }
-    owner.prevDay = () => apply(shiftDate(getDate(), -1));
-    owner.nextDay = () => apply(shiftDate(getDate(), 1));
-    owner.today = () => apply(localDate());
-    owner.pickDate = () => apply(picker.value);
-    return apply;
+    if (s.codedGameState === 'D' || s.codedGameState === 'C') cls = 'final';
+    return {
+      label: label,
+      cls: cls,
+      live: abstractState === 'Live',
+      final: abstractState === 'Final',
+      isReview: isReview,
+      reason: s.reason || '',
+      code: code,
+    };
   }
-  function poll(task, fallback = 10000) {
-    let timer, busy = false, rerun = false, stopped = false, nextAt = 0;
-    const countdown = document.getElementById('countdown');
-    const tick = setInterval(() => {
-      if (countdown) countdown.textContent = document.hidden ? 'Paused while hidden' : busy ? 'Updating…' : `Refresh in ${Math.max(0, Math.ceil((nextAt - Date.now()) / 1000))}s`;
-    }, 1000);
-    async function run() {
-      clearTimeout(timer);
-      if (stopped || document.hidden) return;
-      if (busy) { rerun = true; return; }
-      busy = true;
-      let delay = fallback;
-      try { delay = await task() || fallback; }
-      catch (err) { console.warn('Update failed:', err); }
-      finally {
-        busy = false;
-        if (!stopped) {
-          nextAt = Date.now() + Math.max(MLB.cooldown(), rerun ? 0 : delay);
-          rerun = false;
-          timer = setTimeout(run, Math.max(0, nextAt - Date.now()));
-        }
-      }
-    }
-    const visibility = () => { if (document.hidden) clearTimeout(timer); else run(); };
-    document.addEventListener('visibilitychange', visibility);
-    return { refresh: run, stop() { stopped = true; clearTimeout(timer); clearInterval(tick); document.removeEventListener('visibilitychange', visibility); } };
+
+  function chip(text, cls, title) {
+    return '<span class="chip' + (cls ? ' ' + cls : '') + '"' +
+      (title ? ' title="' + esc(title) + '"' : '') + '>' + esc(text) + '</span>';
   }
-  window.UI = Object.freeze({ escape, reported, value, cell, source, table, logo, teamName, shortName, record, localDate, selectedDate, shiftDate, dateLabel, time, gameHref, state, status, bases, error, setBanner, setStatus, dateControls, poll });
-})();
+
+  global.UI = {
+    LOGO_BASE: LOGO_BASE,
+    TEAM_ABBR: TEAM_ABBR,
+    TEAM_COLORS: TEAM_COLORS,
+    esc: esc,
+    teamId: teamId,
+    teamName: teamName,
+    abbr: abbr,
+    initials: initials,
+    teamLogo: teamLogo,
+    headshot: headshot,
+    countDots: countDots,
+    outsDots: outsDots,
+    baseDiamond: baseDiamond,
+    occupancyFromLinescore: occupancyFromLinescore,
+    statusMeta: statusMeta,
+    chip: chip,
+  };
+}(window));

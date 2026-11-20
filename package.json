@@ -1,21 +1,18 @@
 {
-  "name": "livpbp",
+  "name": "mlb-live-pbp",
   "version": "1.0.0",
   "private": true,
-  "description": "Static official-source MLB scoreboard, game and replay feed",
+  "description": "MLB Live PBP — live MLB scoreboard, play-by-play and replay-review feed (static site, GitHub Pages).",
+  "homepage": "https://snapquast73-boop.github.io/LIVPBP/",
   "license": "MIT",
-  "engines": { "node": ">=22" },
+  "type": "module",
   "scripts": {
-    "start": "node server.mjs",
-    "build": "node tools/build.mjs",
-    "check": "node tools/check.mjs",
-    "test": "node --test tools/unit.test.mjs tools/server.test.mjs",
-    "test:browser": "node tools/browser-test.mjs",
-    "test:live": "node tools/live-smoke.mjs",
-    "verify": "npm run check && npm test && npm run build && npm run test:browser"
+    "test": "node tools/smoke-test.mjs",
+    "serve": "node server.mjs"
   },
   "devDependencies": {
     "@sparticuz/chromium": "153.0.0",
+    "jsdom": "^31.0.1",
     "playwright-core": "1.65.1"
   }
 }

@@ -1,0 +1,41 @@
+name: Published Pages delivery
+on:
+  pull_request:
+    paths: ['tests/pages-delivery.mjs', '.github/workflows/pages-delivery.yml']
+  workflow_dispatch:
+  workflow_run:
+    workflows: ['pages build and deployment', 'pages-build-deployment']
+    types: [completed]
+    branches: [main]
+permissions:
+  contents: read
+  pages: read
+jobs:
+  verify:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Identify published project and revision
+        id: pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILT_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          site=$(gh api "repos/$GITHUB_REPOSITORY/pages" --jq .html_url)
+          sha=${BUILT_SHA:-$(gh api "repos/$GITHUB_REPOSITORY/pages/builds" --jq '[.[] | select(.status == "built")][0].commit')}
+          [[ $sha =~ ^[a-f0-9]{40}$ ]]
+          echo "Comparing $site with $sha"
+          echo "site=${site%/}/" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.pages.outputs.sha }}
+          path: deployed
+          persist-credentials: false
+      - run: node tests/pages-delivery.mjs deployed "$SITE"
+        env:
+          SITE: ${{ steps.pages.outputs.site }}

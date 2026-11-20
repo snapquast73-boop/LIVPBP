@@ -1,7 +1,7 @@
 /* Real official-network verification. No fixtures, skipped checks or guessed fallback results. */
 import assert from 'node:assert/strict';
-import { context } from './test-context.mjs';
-import { harness, sourceRows, noOverflow } from './browser-harness.mjs';
+import { context } from './independent-fixtures.mjs';
+import { harness, sourceRows, noOverflow } from './independent-browser-harness.mjs';
 const { MLB, Reviews } = context({ fetch });
 const sources = [];
 async function checked(url) {

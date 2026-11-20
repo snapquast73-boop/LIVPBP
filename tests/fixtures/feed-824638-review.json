@@ -1,0 +1,313 @@
+{
+  "_provenance": {
+    "note": "Field names, nesting and every literal value copied verbatim from official MLB StatsAPI responses captured 2026-11-20. gameData (teams, status, review and absChallenges counters) is from the verified game 824638 documents; liveData.allPlays holds two real plays copied from the game 824474 play-by-play capture (a scoring single and a manager-challenge play). The two sources are assembled into one document so a parser test can cover both shapes at once; no value was invented or altered. linescore, venue, datetime, weather, decisions, players and currentPlay objects also copied verbatim from the same official captures.",
+    "captures": [
+      "https://statsapi.mlb.com/api/v1/game/824474/playByPlay?fields=allPlays,about,atBatIndex,reviewDetails,reviewType,isOverturned,inProgress,reason,challengeTeamId",
+      "https://statsapi.mlb.com/api/v1/game/824474/playByPlay?fields=allPlays,about,atBatIndex,halfInning,inning,result,awayScore,homeScore,description,eventType,isOut,runners,details,isScoringEvent,playIndex,movement,outBase,start,end",
+      "https://statsapi.mlb.com/api/v1.1/game/824638/feed/live?fields=gameData,review,absChallenges,hasChallenges,away,home,used,remaining,usedSuccessful,usedFailed"
+    ],
+    "capturedOn": "2026-11-20"
+  },
+  "gameData": {
+    "game": {
+      "pk": 824638,
+      "season": "2026"
+    },
+    "teams": {
+      "away": {
+        "id": 113,
+        "name": "Cincinnati Reds",
+        "abbreviation": "CIN"
+      },
+      "home": {
+        "id": 112,
+        "name": "Chicago Cubs",
+        "abbreviation": "CHC"
+      }
+    },
+    "status": {
+      "abstractGameState": "Final",
+      "codedGameState": "F",
+      "detailedState": "Final",
+      "statusCode": "F",
+      "abstractGameCode": "F"
+    },
+    "review": {
+      "hasChallenges": true,
+      "away": {
+        "used": 0,
+        "remaining": 1
+      },
+      "home": {
+        "used": 1,
+        "remaining": 0
+      }
+    },
+    "absChallenges": {
+      "hasChallenges": true,
+      "away": {
+        "usedSuccessful": 3,
+        "usedFailed": 0,
+        "remaining": 2
+      },
+      "home": {
+        "usedSuccessful": 5,
+        "usedFailed": 0,
+        "remaining": 2
+      }
+    },
+    "venue": {
+      "id": 17,
+      "name": "Wrigley Field",
+      "link": "/api/v1/venues/17"
+    },
+    "datetime": {
+      "dateTime": "2026-08-28T18:20:00Z",
+      "dayNight": "day"
+    },
+    "weather": {
+      "condition": "Partly Cloudy",
+      "temp": "74",
+      "wind": "8 mph, In From LF"
+    },
+    "decisions": {
+      "winner": {
+        "id": 695076,
+        "fullName": "Rhett Lowder"
+      },
+      "loser": {
+        "id": 663423,
+        "fullName": "Trent Thornton"
+      },
+      "save": {
+        "id": 641941,
+        "fullName": "Emilio Pagán"
+      }
+    },
+    "players": {
+      "ID663538": {
+        "id": 663538,
+        "fullName": "Nico Hoerner",
+        "primaryPosition": {
+          "code": "4",
+          "abbreviation": "2B",
+          "name": "Second Base"
+        }
+      },
+      "ID682829": {
+        "id": 682829,
+        "fullName": "Elly De La Cruz",
+        "primaryPosition": {
+          "code": "6",
+          "abbreviation": "SS",
+          "name": "Shortstop"
+        }
+      }
+    }
+  },
+  "liveData": {
+    "plays": {
+      "allPlays": [
+        {
+          "result": {
+            "eventType": "single",
+            "description": "JJ Bleday singles on a sharp line drive to right fielder Jordan Walker. Héctor Rodríguez scores. Ke'Bryan Hayes to 3rd. Sal Stewart to 2nd.",
+            "awayScore": 4,
+            "homeScore": 1,
+            "isOut": false
+          },
+          "about": {
+            "atBatIndex": 46,
+            "halfInning": "bottom",
+            "inning": 6
+          },
+          "runners": [
+            {
+              "movement": {
+                "originBase": null,
+                "start": null,
+                "end": "1B",
+                "outBase": null,
+                "isOut": false,
+                "outNumber": null
+              },
+              "details": {
+                "event": "Single",
+                "eventType": "single",
+                "movementReason": null,
+                "isScoringEvent": false,
+                "rbi": false,
+                "earned": false,
+                "teamUnearned": false,
+                "playIndex": 3
+              }
+            },
+            {
+              "movement": {
+                "originBase": "3B",
+                "start": "3B",
+                "end": "score",
+                "outBase": null,
+                "isOut": false,
+                "outNumber": null
+              },
+              "details": {
+                "event": "Single",
+                "eventType": "single",
+                "movementReason": "r_adv_force",
+                "isScoringEvent": true,
+                "rbi": true,
+                "earned": true,
+                "teamUnearned": false,
+                "playIndex": 3
+              }
+            },
+            {
+              "movement": {
+                "originBase": "2B",
+                "start": "2B",
+                "end": "3B",
+                "outBase": null,
+                "isOut": false,
+                "outNumber": null
+              },
+              "details": {
+                "event": "Single",
+                "eventType": "single",
+                "movementReason": "r_adv_force",
+                "isScoringEvent": false,
+                "rbi": false,
+                "earned": false,
+                "teamUnearned": false,
+                "playIndex": 3
+              }
+            }
+          ],
+          "atBatIndex": 46
+        },
+        {
+          "about": {
+            "atBatIndex": 65
+          },
+          "reviewDetails": {
+            "isOverturned": false,
+            "inProgress": false,
+            "reviewType": "MI",
+            "challengeTeamId": 113
+          },
+          "atBatIndex": 65
+        }
+      ],
+      "currentPlay": {
+        "result": {
+          "eventType": "strikeout",
+          "description": "Elly De La Cruz strikes out swinging.",
+          "awayScore": 4,
+          "homeScore": 1,
+          "isOut": true
+        },
+        "about": {
+          "atBatIndex": 44,
+          "halfInning": "bottom",
+          "inning": 6
+        },
+        "count": {
+          "balls": 1,
+          "strikes": 2,
+          "outs": 1
+        },
+        "matchup": {
+          "batter": {
+            "id": 682829,
+            "fullName": "Elly De La Cruz"
+          },
+          "pitcher": {
+            "id": 641941,
+            "fullName": "Emilio Pagán"
+          }
+        },
+        "runners": []
+      }
+    },
+    "linescore": {
+      "currentInning": 9,
+      "currentInningOrdinal": "9th",
+      "inningState": "Bottom",
+      "inningHalf": "Bottom",
+      "isTopInning": false,
+      "scheduledInnings": 9,
+      "innings": [
+        {
+          "num": 1,
+          "ordinalNum": "1st",
+          "home": {
+            "runs": 1,
+            "hits": 2,
+            "errors": 0,
+            "leftOnBase": 1
+          },
+          "away": {
+            "runs": 0,
+            "hits": 1,
+            "errors": 0,
+            "leftOnBase": 2
+          }
+        },
+        {
+          "num": 2,
+          "ordinalNum": "2nd",
+          "home": {
+            "runs": 0,
+            "hits": 1,
+            "errors": 0,
+            "leftOnBase": 1
+          },
+          "away": {
+            "runs": 0,
+            "hits": 1,
+            "errors": 0,
+            "leftOnBase": 1
+          }
+        },
+        {
+          "num": 9,
+          "ordinalNum": "9th",
+          "home": {
+            "runs": 0,
+            "hits": 0,
+            "errors": 0,
+            "leftOnBase": 0
+          },
+          "away": {
+            "runs": 1,
+            "hits": 1,
+            "errors": 0,
+            "leftOnBase": 0
+          }
+        }
+      ],
+      "teams": {
+        "home": {
+          "runs": 8,
+          "hits": 13,
+          "errors": 2,
+          "leftOnBase": 7,
+          "isWinner": false
+        },
+        "away": {
+          "runs": 10,
+          "hits": 13,
+          "errors": 0,
+          "leftOnBase": 9,
+          "isWinner": true
+        }
+      },
+      "balls": 1,
+      "strikes": 1,
+      "outs": 3
+    },
+    "boxscore": {
+      "teams": {}
+    }
+  }
+}
