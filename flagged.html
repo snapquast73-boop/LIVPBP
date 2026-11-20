@@ -135,26 +135,26 @@
         <tr>
           <td>I-1</td>
           <td class="wrap"><strong>All front-end assets were missing.</strong> <code>index.html</code>, <code>game.html</code> and <code>reviews.html</code> load <code>assets/css/style.css</code> plus <code>assets/js/{api,ui,reviews,feed-log,scoreboard,game,props,reviews-feed}.js</code>; none of those files existed, so every page loaded unstyled and inert.</td>
-          <td class="wrap">Script/style tags in the three pages; <code>find . -type f</code> on the base commit shows no <code>assets/</code> directory; the deployed page renders only its static footer.</td>
-          <td class="wrap">Rebuilt all nine files from the contract in the pages + README. Verified with <code>tools/smoke-test.mjs</code> (40 checks) and the parallel session's <code>tools/restoration-check.mjs</code>.</td>
+          <td class="wrap">Script/style tags in the three pages; <a href="https://api.github.com/repos/snapquast73-boop/LIVPBP/git/trees/aef1a74c40143a7fff9d24853418002e008b79b1?recursive=1" target="_blank" rel="noopener">base tree aef1a74 via GitHub API</a> shows no <code>assets/</code> directory; the deployed page rendered only its static footer.</td>
+          <td class="wrap">Rebuilt all nine files from the contract in the pages + README. Verified with <code>tools/smoke-test.mjs</code> (44 checks) and the parallel session's <code>tools/restoration-check.mjs</code>.</td>
         </tr>
         <tr>
           <td>I-2</td>
           <td class="wrap"><code>docs/</code> referenced by the README (<code>verification-report.md</code>, <code>api-compliance.md</code>, <code>scoring-changes.md</code>, <code>workflows/pages.yml</code>, <code>workflows/smoke.yml</code>) does not exist.</td>
-          <td class="wrap">README “Project structure”, “Deploy to GitHub Pages”, “Notes &amp; etiquette”.</td>
+          <td class="wrap">README “Project structure”, “Deploy to GitHub Pages”, “Notes &amp; etiquette” (<a href="https://github.com/snapquast73-boop/LIVPBP/blob/aef1a74c40143a7fff9d24853418002e008b79b1/README.md" target="_blank" rel="noopener">base README @ aef1a74</a>).</td>
           <td class="wrap"><code>docs/verification-report.md</code> re-created; deployment uses the repository's native Pages build (Settings → Pages → <code>main</code> / root), so no workflow file is needed. Remaining missing docs are flagged U-7.</td>
         </tr>
         <tr>
           <td>I-3</td>
           <td class="wrap">The README's 17 <code>tools/*.mjs</code> self-checks were not uploaded.</td>
-          <td class="wrap">README “Run it locally”.</td>
+          <td class="wrap">README “Run it locally” (<a href="https://github.com/snapquast73-boop/LIVPBP/blob/aef1a74c40143a7fff9d24853418002e008b79b1/README.md" target="_blank" rel="noopener">base README @ aef1a74</a>).</td>
           <td class="wrap">Replaced by <code>tools/smoke-test.mjs</code> (network-free, jsdom, real payload shapes). The original scripts remain unavailable (U-7).</td>
         </tr>
         <tr>
           <td>I-4</td>
-          <td class="wrap">README advertises a stable revert tag <code>v1.0.0-stable-checkpoint</code>; the repository has exactly one commit and no tags, so the instruction cannot work.</td>
-          <td class="wrap">README lines 3–8; <code>git tag</code> empty.</td>
-          <td class="wrap">Left the README text untouched (content preserved); flagged U-5 so you can tag the merged commit if you want that checkpoint.</td>
+          <td class="wrap">README advertises a stable revert tag <code>v1.0.0-stable-checkpoint</code>; the base upload had one commit and no tags, so the instruction could not work before tagging.</td>
+          <td class="wrap"><a href="https://api.github.com/repos/snapquast73-boop/LIVPBP/tags" target="_blank" rel="noopener">api.github.com/repos/snapquast73-boop/LIVPBP/tags</a> (empty on initial upload; subsequently tagged, see U-5).</td>
+          <td class="wrap">Left the README text untouched (content preserved); resolved in U-5 once the verified merge commit was tagged.</td>
         </tr>
         <tr>
           <td>I-5</td>
@@ -165,13 +165,13 @@
         <tr>
           <td>I-6</td>
           <td class="wrap"><code>server.mjs</code> robustness defects: <code>decodeURIComponent(pathname)</code> throws on a malformed <code>%</code> escape (uncaught → process exit), and the containment test <code>filePath.startsWith(REPO_DIR)</code> accepts sibling directories that share the prefix.</td>
-          <td class="wrap"><code>server.mjs</code> static handler.</td>
+          <td class="wrap"><a href="https://github.com/snapquast73-boop/LIVPBP/blob/aef1a74c40143a7fff9d24853418002e008b79b1/server.mjs#L396-L407" target="_blank" rel="noopener">server.mjs static handler @ aef1a74</a>.</td>
           <td class="wrap"><strong>Fixed 2026-11-20 by session <code>f132969c</code></strong> (U-3): malformed <code>%</code> escapes now return 400 instead of crashing the process, and the containment test requires a path separator so sibling-prefix directories are rejected. Verified locally: <code>/%</code> → 400, all static routes → 200, server stays up. GitHub Pages never runs <code>server.mjs</code>, so the live site is unaffected.</td>
         </tr>
         <tr>
           <td>I-7</td>
           <td class="wrap"><code>data/</code> (the server's JSON store) was not listed in <code>.gitignore</code>, so runtime logs could be committed accidentally.</td>
-          <td class="wrap"><code>.gitignore</code>.</td>
+          <td class="wrap"><a href="https://github.com/snapquast73-boop/LIVPBP/blob/aef1a74c40143a7fff9d24853418002e008b79b1/.gitignore" target="_blank" rel="noopener">.gitignore @ aef1a74</a>.</td>
           <td class="wrap"><strong>Fixed:</strong> <code>data/</code> added to <code>.gitignore</code>. No other ignore rules changed.</td>
         </tr>
         <tr>
@@ -186,40 +186,45 @@
     <h2>3. Flagged — needs your decision or is unverified</h2>
     <table class="verify">
       <thead>
-        <tr><th>#</th><th>Item</th><th>What is unverified / why</th><th>Official source</th><th>Status</th></tr>
+        <tr><th>#</th><th>Item</th><th>Confirmed official value</th><th>What is unverified / why</th><th>Official source</th><th>Status</th></tr>
       </thead>
       <tbody>
         <tr>
           <td>U-1</td>
           <td class="wrap">Club colour palette (<code>TEAM_COLORS</code> in <code>assets/js/ui.js</code>)</td>
-          <td class="wrap">Presentation only (chips/accents). The StatsAPI does not publish club colours, and the original palette was not uploaded, so these values are approximations rather than official colours.</td>
-          <td class="wrap">—</td>
+          <td></td>
+          <td class="wrap">Presentation only (chips/accents). The StatsAPI does not publish club hex colours, and the original palette was not uploaded; official value left blank here (never claimed as official).</td>
+          <td class="wrap"><a href="https://statsapi.mlb.com/api/v1/teams?sportId=1" target="_blank" rel="noopener">statsapi.mlb.com/api/v1/teams?sportId=1</a></td>
           <td class="status-unverified">Unverified</td>
         </tr>
         <tr>
           <td>U-2</td>
           <td class="wrap">Hit-forecast model constants: count factors (e.g. 3-1 ×1.30, 0-2 ×0.82), clamp bands 13–62% / 10–78%, tier cut-offs (34/29/23.5/19%), ±1.9-logit cap, regression weights, form/H2H weights</td>
-          <td class="wrap">The README states these behaviours and the bands, but the derivation scripts it cites (<code>tools/count-model-derivation.mjs</code>, <code>tools/model-calibration-report.mjs</code>) were not uploaded. The <em>inputs</em> are official (season, xBA, splits, game log, H2H); the <em>weights</em> are the reconstructions' own and are documented in the model file.</td>
+          <td></td>
+          <td class="wrap">The README states these behaviours and the bands, but the derivation scripts it cites (<code>tools/count-model-derivation.mjs</code>, <code>tools/model-calibration-report.mjs</code>) were not uploaded. The <em>inputs</em> are official (season, xBA, splits, game log, H2H); exact original weights cannot be confirmed from an official source and are left blank here.</td>
           <td class="wrap"><a href="https://statsapi.mlb.com/api/v1/people/660271/stats?stats=season,statSplits,gameLog,expectedStatistics&amp;group=hitting&amp;sitCodes=vl,vr" target="_blank" rel="noopener">people/{id}/stats (the inputs)</a></td>
-          <td class="status-flag">Flagged</td>
+          <td class="status-unverified">Unverified</td>
         </tr>
         <tr>
           <td>U-3</td>
           <td class="wrap"><code>server.mjs</code> crash + path-containment defects (I-6)</td>
+          <td class="wrap">HTTP 400 on malformed <code>%</code>; <code>REPO_DIR + path.sep</code> check</td>
           <td class="wrap"><strong>Fixed 2026-11-20 by session <code>f132969c</code>:</strong> <code>decodeURIComponent</code> is now wrapped in try/catch (malformed escape → 400, no process exit) and containment compares against <code>REPO_DIR + path.sep</code>. Local check: <code>/%</code> → 400, <code>/</code>, <code>/reviews.html</code>, <code>/assets/js/api.js</code>, <code>/api/health</code> → 200. Not exercised by GitHub Pages (static hosting).</td>
-          <td class="wrap">—</td>
+          <td class="wrap"><a href="https://github.com/snapquast73-boop/LIVPBP/blob/main/server.mjs" target="_blank" rel="noopener">github.com/snapquast73-boop/LIVPBP/blob/main/server.mjs</a></td>
           <td class="status-ok">Fixed</td>
         </tr>
         <tr>
           <td>U-4</td>
           <td class="wrap"><code>data/</code> in <code>.gitignore</code> (I-7)</td>
+          <td class="wrap"><code>data/</code> ignored</td>
           <td class="wrap">Resolved in this change: the directory is now ignored. Nothing else about the local server changed.</td>
-          <td class="wrap">—</td>
+          <td class="wrap"><a href="https://github.com/snapquast73-boop/LIVPBP/blob/main/.gitignore" target="_blank" rel="noopener">github.com/snapquast73-boop/LIVPBP/blob/main/.gitignore</a></td>
           <td class="status-ok">Fixed</td>
         </tr>
         <tr>
           <td>U-5</td>
           <td class="wrap">Stable checkpoint tag <code>v1.0.0-stable-checkpoint</code></td>
+          <td class="wrap"><code>5a06fef</code></td>
           <td class="wrap"><strong>Resolved 2026-11-20:</strong> the tag now exists on the verified merge commit <code>5a06fef</code> (PR #7), so the README's <code>git reset --hard v1.0.0-stable-checkpoint</code> instruction works. It was created after this row was written, by the integration session.</td>
           <td class="wrap"><a href="https://github.com/snapquast73-boop/LIVPBP/releases/tag/v1.0.0-stable-checkpoint" target="_blank" rel="noopener">tag v1.0.0-stable-checkpoint</a></td>
           <td class="status-ok">Done</td>
@@ -227,6 +232,7 @@
         <tr>
           <td>U-6</td>
           <td class="wrap">Upstream source repository / original live demo</td>
+          <td></td>
           <td class="wrap"><code>buffedlizard55-lab/MLB-Live-PBP</code> is 404 and code search returns nothing, so the original <code>assets/</code> could not be restored byte-for-byte. The reconstruction matches the documented contract, not the lost source.</td>
           <td class="wrap"><a href="https://api.github.com/repos/buffedlizard55-lab/MLB-Live-PBP" target="_blank" rel="noopener">api.github.com/repos/buffedlizard55-lab/MLB-Live-PBP</a></td>
           <td class="status-unverified">Unverified</td>
@@ -234,36 +240,41 @@
         <tr>
           <td>U-7</td>
           <td class="wrap">Original <code>docs/*</code> and <code>tools/*</code> files</td>
+          <td></td>
           <td class="wrap">Not uploaded, not recoverable. <code>docs/verification-report.md</code> was re-created with this session's evidence; the other referenced documents (<code>api-compliance.md</code>, <code>scoring-changes.md</code>) and the 17 test scripts do not exist in this repo.</td>
-          <td class="wrap">—</td>
-          <td class="status-flag">Flagged</td>
+          <td class="wrap"><a href="https://api.github.com/repos/snapquast73-boop/LIVPBP/git/trees/aef1a74c40143a7fff9d24853418002e008b79b1?recursive=1" target="_blank" rel="noopener">base upload tree @ aef1a74</a></td>
+          <td class="status-unverified">Unverified</td>
         </tr>
         <tr>
           <td>U-8</td>
           <td class="wrap">Player headshot URL pattern</td>
+          <td></td>
           <td class="wrap">The README truncates the <code>img.mlbstatic.com/mlb-photos</code> path, and the image host returned HTTP 500 to the build sandbox, so the exact transformation string could not be confirmed. The UI degrades to an initials badge when the image fails, so a wrong pattern costs a fallback, never a broken layout.</td>
-          <td class="wrap">—</td>
+          <td class="wrap"><a href="https://img.mlbstatic.com/mlb-photos/image/upload/v1/people/660271/headshot/67/current" target="_blank" rel="noopener">img.mlbstatic.com headshot endpoint</a></td>
           <td class="status-unverified">Unverified</td>
         </tr>
         <tr>
           <td>U-9</td>
-          <td class="wrap">“≥1 hit in next N PAs” remaining-plate-appearance estimate (≈0.45 PA per remaining team inning, bounded 1–4, 0 after Final)</td>
-          <td class="wrap">The README describes the projection and its 50–95% band but the derivation script was not uploaded; the remaining-PA count is an estimate, not an official figure.</td>
-          <td class="wrap">—</td>
-          <td class="status-flag">Flagged</td>
+          <td class="wrap">“≥1 hit in next N PAs” remaining-plate-appearance estimate (≈0.45 PA per remaining team inning, bounded 2–4 while live, 0 after Final)</td>
+          <td></td>
+          <td class="wrap">The README describes the projection and its 50–95% band but the derivation script was not uploaded; the remaining-PA count is an estimate, not an official figure, so the official value cell is left blank.</td>
+          <td class="wrap"><a href="https://statsapi.mlb.com/api/v1.1/game/824638/feed/live?fields=liveData,linescore,currentInning,inningState" target="_blank" rel="noopener">feed/live linescore (official inning input)</a></td>
+          <td class="status-unverified">Unverified</td>
         </tr>
         <tr>
           <td>U-10</td>
           <td class="wrap">Polling cadences (500 ms live, 250 ms in-review, 125 ms status sweep) against the StatsAPI</td>
-          <td class="wrap">These are the cadences the README specifies and the code keeps, including “pause while the tab is hidden” and HTTP-429 back-off. The StatsAPI publishes <strong>no</strong> documented rate limit, so the acceptability of the cadence is a judgement call, not a verified fact. Every page also stops polling when hidden.</td>
-          <td class="wrap"><a href="https://statsapi.mlb.com/api/v1/gameStatus" target="_blank" rel="noopener">statsapi.mlb.com (undocumented public API)</a></td>
-          <td class="status-flag">Flagged</td>
+          <td></td>
+          <td class="wrap">These are the cadences the README specifies and the code keeps, including “pause while the tab is hidden” and HTTP-429 back-off. The StatsAPI publishes <strong>no</strong> documented numeric rate limit (confirmed blank), so acceptability of the cadence is a judgement call, not a verified number.</td>
+          <td class="wrap"><a href="https://www.mlb.com/official-information/terms-of-use" target="_blank" rel="noopener">mlb.com Terms of Use</a> · <a href="https://statsapi.mlb.com/api/v1/gameStatus" target="_blank" rel="noopener">statsapi.mlb.com</a></td>
+          <td class="status-unverified">Unverified</td>
         </tr>
         <tr>
           <td>U-11</td>
           <td class="wrap">Cross-browser shared Feed Log on GitHub Pages</td>
+          <td class="wrap">Static hosting only (per-browser <code>localStorage</code>)</td>
           <td class="wrap">Pages is static: <code>/api/feed-log</code> and the SSE stream only exist when <code>node server.mjs</code> is running. On Pages the log persists per browser (localStorage, newest 7 dates); cross-browser sharing is unavailable there and the pages say so in the status line.</td>
-          <td class="wrap">—</td>
+          <td class="wrap"><a href="https://docs.github.com/en/pages/getting-started-with-github-pages/about-github-pages#limits-on-use-of-github-pages" target="_blank" rel="noopener">GitHub Pages static-hosting docs</a></td>
           <td class="status-flag">Flagged</td>
         </tr>
       </tbody>
@@ -356,7 +367,7 @@
           <td>F-001<br><span style="color:var(--dim)">Low</span></td>
           <td class="wrap">The brief's per-session branch name (<code>session-&lt;id&gt;/&lt;task&gt;</code>) conflicts with this session's fixed Arena branch.</td>
           <td class="wrap">All work stayed on <code>arena/681bfa13-livpbp</code>; logged in COORDINATION.md.</td>
-          <td class="wrap"><a href="COORDINATION.md">COORDINATION.md</a></td>
+          <td class="wrap"><a href="COORDINATION.md">COORDINATION.md</a> · <a href="https://github.com/snapquast73-boop/LIVPBP/blob/main/COORDINATION.md" target="_blank" rel="noopener">GitHub COORDINATION.md</a></td>
         </tr>
         <tr>
           <td>F-002<br><span style="color:var(--dim)">High</span></td>
@@ -368,7 +379,7 @@
           <td>F-003<br><span style="color:var(--dim)">Medium</span></td>
           <td class="wrap">README.md links to files that were not uploaded: <code>docs/verification-report.md</code>, <code>docs/api-compliance.md</code>, <code>docs/scoring-changes.md</code>, <code>docs/workflows/</code>, and 14 <code>tools/*.mjs</code> test/preview files. Claims sourced only from those documents (e.g. historical “verified live” dates) could not be re-verified.</td>
           <td class="wrap">Left README text intact (except the demo link, F-008); claims not re-verified are not repeated as fact anywhere in the new code. One checker was rebuilt as <code>tools/restoration-check.mjs</code>.</td>
-          <td class="wrap"><a href="README.md">README.md</a></td>
+          <td class="wrap"><a href="README.md">README.md</a> · <a href="https://github.com/snapquast73-boop/LIVPBP/commit/aef1a74c40143a7fff9d24853418002e008b79b1" target="_blank" rel="noopener">base upload commit aef1a74</a></td>
         </tr>
         <tr>
           <td>F-004<br><span style="color:var(--dim)">Medium — unverified</span></td>
@@ -478,7 +489,7 @@
         <tr>
           <td>V-6</td>
           <td>End-to-end render of the shipped pages against fixtures whose values were copied verbatim from the responses above: <strong>37/37</strong> checks (scoreboard cards with the real 10–8 final, game header names/logos/score, play-by-play, review chips, linescore, all four game tabs, replay-feed rows/stats/tabs/toggles, 404), no uncaught errors.</td>
-          <td><a href="tests/jsdom-render-test.mjs">tests/jsdom-render-test.mjs</a> · <a href="tests/README.md">tests/README.md</a></td>
+          <td><a href="tests/jsdom-render-test.mjs">tests/jsdom-render-test.mjs</a> · <a href="tests/README.md">tests/README.md</a> · <a href="https://statsapi.mlb.com/api/v1.1/game/824638/feed/live" target="_blank" rel="noopener">source payload 824638</a></td>
           <td class="status-ok">Passing</td>
         </tr>
         <tr>
@@ -516,7 +527,7 @@
         <tr>
           <td>W-3</td>
           <td><strong><code>reviews.html</code> duplicate Flagged links merged</strong> into one footer link. No other page had the duplicate (<code>index.html</code>, <code>game.html</code> each have one).</td>
-          <td>Local file check</td>
+          <td><a href="https://github.com/snapquast73-boop/LIVPBP/blob/main/reviews.html" target="_blank" rel="noopener">github.com/snapquast73-boop/LIVPBP/blob/main/reviews.html</a></td>
           <td class="status-ok">Fixed</td>
         </tr>
         <tr>
@@ -528,7 +539,102 @@
       </tbody>
     </table>
 
-    <h2>9. Checks you can run</h2>
+    <h2>9. Live-StatsAPI line-by-line audit &amp; Replay Feed comparison integration (session <code>1f908513</code>, 2026-11-20)</h2>
+    <p style="color:var(--muted);font-size:13px">
+      Session <code>1f908513</code> re-verified every module line by line against live 2026 MLB StatsAPI
+      responses and integrated the six items from session <code>8a71f704</code>'s independent audit
+      (<a href="audit/reference-replay-comparison.md">audit/reference-replay-comparison.md</a>).
+      Unconfirmed values are left blank (never inferred).
+    </p>
+    <table class="verify">
+      <thead>
+        <tr><th>#</th><th>Item / finding</th><th>Confirmed value</th><th>Resolution / note</th><th>Official source</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>L-1</td>
+          <td class="wrap"><code>expectedStatistics</code> xBA field name in <code>assets/js/props.js</code></td>
+          <td class="wrap"><code>stat.avg</code> (<code>".277"</code> on player 682829)</td>
+          <td class="wrap"><strong>Bug found &amp; fixed:</strong> MLB StatsAPI <code>expectedStatistics</code> publishes expected BA in <code>stat.avg</code> (no <code>stat.xba</code> key exists in the live response), so xBA was previously ignored on real games. <code>expectedStat()</code> now reads <code>stat.xba ?? stat.avg</code> inside <code>expectedStatistics</code>.</td>
+          <td class="wrap"><a href="https://statsapi.mlb.com/api/v1/people/682829/stats?stats=season,expectedStatistics&amp;group=hitting&amp;season=2026" target="_blank" rel="noopener">people/682829/stats (expectedStatistics)</a></td>
+          <td class="status-ok">Fixed &amp; tested</td>
+        </tr>
+        <tr>
+          <td>L-2</td>
+          <td class="wrap"><code>vsPlayer</code> H2H block type &amp; multi-team combined splits in <code>assets/js/props.js</code></td>
+          <td class="wrap"><code>vsPlayerTotal</code> / <code>!split.team</code></td>
+          <td class="wrap"><strong>Bug found &amp; fixed:</strong> <code>stats=vsPlayer</code> returns <code>type.displayName = "vsPlayerTotal"</code> and <code>"vsPlayer"</code> (not <code>"season"</code>), and traded players (e.g. 656849 in 2026) return per-club splits plus a combined row without <code>team</code>. Both are now handled.</td>
+          <td class="wrap"><a href="https://statsapi.mlb.com/api/v1/people/682829/stats?stats=vsPlayer&amp;group=hitting&amp;opposingPlayerId=656849" target="_blank" rel="noopener">people/682829 vsPlayer 656849</a> · <a href="https://statsapi.mlb.com/api/v1/people/656849/stats?stats=season,statSplits&amp;group=pitching&amp;sitCodes=vl,vr&amp;season=2026" target="_blank" rel="noopener">people/656849 multi-team splits</a></td>
+          <td class="status-ok">Fixed &amp; tested</td>
+        </tr>
+        <tr>
+          <td>L-3</td>
+          <td class="wrap">Per-player season stat line on <code>game.html</code> (<code>seasonLine()</code> in <code>assets/js/game.js</code>)</td>
+          <td class="wrap"><code>boxscore.teams.&lt;side&gt;.players.ID&lt;id&gt;.seasonStats</code></td>
+          <td class="wrap"><strong>Bug found &amp; fixed:</strong> live <code>feed/live</code> stores player season AVG/ERA under <code>liveData.boxscore.teams.&lt;side&gt;.players.ID&lt;id&gt;.seasonStats</code> rather than <code>gameData.players.ID&lt;id&gt;.stats</code>. Added fallback so live cards and the Props tab display official season lines.</td>
+          <td class="wrap"><a href="https://statsapi.mlb.com/api/v1/game/823424/boxscore" target="_blank" rel="noopener">game/823424/boxscore</a></td>
+          <td class="status-ok">Fixed &amp; tested</td>
+        </tr>
+        <tr>
+          <td>L-4</td>
+          <td class="wrap">PA-ending ABS pitch challenges (<code>play.reviewDetails</code> with <code>reviewType: "MJ"</code>) &amp; <code>MF</code> fallback reason in <code>assets/js/reviews.js</code></td>
+          <td class="wrap"><code>MJ</code> on play 36 (823424) &amp; plays 72, 86 (824638); <code>MF</code> = “Close play at 1st”</td>
+          <td class="wrap"><strong>Fixed:</strong> when an ABS challenge ends a plate appearance (strikeout/walk), MLB attaches <code>reviewDetails</code> on the play rather than <code>playEvents[i]</code>; the parser now resolves the final pitch in <code>playEvents</code> for pitch/count metadata and includes <code>MF</code> in offline fallback reasons.</td>
+          <td class="wrap"><a href="https://statsapi.mlb.com/api/v1/game/824638/playByPlay" target="_blank" rel="noopener">game/824638/playByPlay</a> · <a href="https://statsapi.mlb.com/api/v1/gameStatus" target="_blank" rel="noopener">api/v1/gameStatus</a></td>
+          <td class="status-ok">Fixed &amp; tested</td>
+        </tr>
+        <tr>
+          <td>RR-01</td>
+          <td class="wrap">Stale in-flight schedule/game response across date navigation in <code>assets/js/reviews-feed.js</code></td>
+          <td class="wrap"><code>officialDate: "2026-03-27"</code> on game 823243</td>
+          <td class="wrap"><strong>Fixed:</strong> added a monotonic <code>dateSeq</code> generation guard across <code>setDate</code>, <code>scan</code>, <code>sweep</code>, <code>ingestGame</code>, <code>persist</code> and <code>FeedLog.load</code> so delayed responses from an earlier date cannot mutate or persist into the newly selected date.</td>
+          <td class="wrap"><a href="https://statsapi.mlb.com/api/v1.1/game/823243/feed/live?fields=gamePk,gameData,datetime,officialDate" target="_blank" rel="noopener">game/823243 officialDate</a></td>
+          <td class="status-ok">Fixed &amp; regression-tested</td>
+        </tr>
+        <tr>
+          <td>RR-02</td>
+          <td class="wrap">Official <code>pitchNumber</code> vs <code>playEvents</code> array position on ABS challenges</td>
+          <td class="wrap"><code>pitchNumber: 3</code> at <code>playEvents[4]</code> (game 823243, play 54)</td>
+          <td class="wrap"><strong>Fixed:</strong> added <code>pitchNumber</code> to <code>PLAYBYPLAY_FIELDS</code> and updated <code>pitchNumberOf()</code> to read official <code>ev.pitchNumber</code> (never substituting raw array index when non-pitch step-offs/actions precede pitches).</td>
+          <td class="wrap"><a href="https://statsapi.mlb.com/api/v1/game/823243/playByPlay?fields=allPlays,about,atBatIndex,playEvents,pitchNumber,reviewDetails,reviewType" target="_blank" rel="noopener">game/823243 play 54 pitchNumber</a></td>
+          <td class="status-ok">Fixed &amp; regression-tested</td>
+        </tr>
+        <tr>
+          <td>RR-03</td>
+          <td class="wrap">Official scoring-change rows visibility under the Replay Feed <strong>All</strong> filter</td>
+          <td class="wrap">Shown in both <strong>All</strong> and <strong>Scoring Changes</strong></td>
+          <td class="wrap"><strong>Fixed:</strong> <code>entryMatches(entry, 'all')</code> now includes <code>scoring_change</code> entries alongside non-ABS reviews and pending rulings, matching the page footer documentation.</td>
+          <td class="wrap"><a href="https://www.mlb.com/official-information/scoring-changes" target="_blank" rel="noopener">mlb.com/official-information/scoring-changes</a></td>
+          <td class="status-ok">Fixed &amp; regression-tested</td>
+        </tr>
+        <tr>
+          <td>RR-04</td>
+          <td class="wrap">Direct first-party official MLB StatsAPI source link on every rendered Replay Feed &amp; game review card</td>
+          <td class="wrap"><code>/api/v1/game/{gamePk}/playByPlay</code></td>
+          <td class="wrap"><strong>Fixed:</strong> every rendered replay row in <code>reviews-feed.js</code> and review card in <code>game.js</code> preserves the internal game link and adds a direct <code>MLB API ↗</code> link to that game's official <code>playByPlay</code> endpoint.</td>
+          <td class="wrap"><a href="https://statsapi.mlb.com/api/v1/game/823243/playByPlay" target="_blank" rel="noopener">statsapi.mlb.com/api/v1/game/823243/playByPlay</a></td>
+          <td class="status-ok">Fixed &amp; regression-tested</td>
+        </tr>
+        <tr>
+          <td>RR-05</td>
+          <td class="wrap">Audio cue difference across sibling reference deployments (raindrop chime vs Sound Lab cash-register cue)</td>
+          <td></td>
+          <td class="wrap"><strong>Flagged as unverified:</strong> the lost upstream repository cannot confirm which audio cue existed originally; confirmed value is left blank and <code>reviews.html</code>'s documented raindrop cue is preserved unchanged.</td>
+          <td class="wrap"><a href="https://api.github.com/repos/buffedlizard55-lab/MLB-Live-PBP" target="_blank" rel="noopener">upstream repo (404)</a> · <a href="audit/reference-replay-comparison.md">audit/reference-replay-comparison.md</a></td>
+          <td class="status-unverified">Unverified</td>
+        </tr>
+        <tr>
+          <td>RR-06</td>
+          <td class="wrap">Smoke-test script-readiness timing on <code>Scoreboard.pickDate</code></td>
+          <td class="wrap">44/44 checks passing, 0 <code>jsdomError</code>s</td>
+          <td class="wrap"><strong>Fixed:</strong> <code>boot()</code> in <code>tools/smoke-test.mjs</code> now awaits <code>document.readyState === 'complete'</code> before firing synthetic DOM events and fails on any unexpected <code>jsdomError</code>.</td>
+          <td class="wrap"><a href="https://github.com/snapquast73-boop/LIVPBP/blob/main/tools/smoke-test.mjs" target="_blank" rel="noopener">github.com/snapquast73-boop/LIVPBP/blob/main/tools/smoke-test.mjs</a></td>
+          <td class="status-ok">Fixed &amp; verified</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>10. Checks you can run</h2>
     <pre class="wrap" style="white-space:pre-wrap">npm install --no-save jsdom     # dev-only; the site itself has no dependencies
 node tests/run-all.mjs           # syntax · link check · DOM-contract check · end-to-end render
 node tests/jsdom-render-test.mjs --live   # same end-to-end render against the live StatsAPI
