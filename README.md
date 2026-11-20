@@ -116,7 +116,9 @@ mlb.com uses, re-implemented from scratch in vanilla HTML/CSS/JS.
     with codes `MJ` = ABS pitch challenge, `MA`/`MF` = manager challenges, and
     `NH` = boundary-call review, plus
     `feed.gameData.review` / `feed.gameData.absChallenges` challenge counters) — see
-    `docs/verification-report.md` and `tools/review-test.mjs`.
+    `docs/verification-report.md` and `tools/smoke-test.mjs` (review-parser checks) plus
+    `tests/jsdom-render-test.mjs` (end-to-end render). The original `tools/review-test.mjs`
+    was not part of the upload — see `flagged.html` F-003.
 - **Two-sided hit forecast** — a transparent per-plate-appearance hit probability that
   compounds the batter's and pitcher's season rates (log5), real platoon splits,
   recent form, head-to-head history, same-game familiarity, and the live count into a
@@ -224,7 +226,9 @@ shown, and they intentionally live in different bands:
   synthetic edges like an overmatched call-up vs an ace (~13%) or an elite hitter on
   a hitter's count vs a weak arm (~50%). A single-PA hit rate can't honestly reach
   80%: even a perfect .400 hitter vs a .150-allowed pitcher resolves to ~55% before
-  clamps. See `tools/model-calibration-report.mjs` for the archetype grid.
+  clamps. (The original `tools/model-calibration-report.mjs` archetype grid was not part of
+  the upload — see `flagged.html` F-003/U-2; the shipped model constants are documented in
+  `assets/js/props.js`.)
 - **"≥1 hit in next N PAs" projection** — the *wide* number, and where the promised
   16–95% spread actually lives. It is `1 − (1 − per-PA)^remaining PAs`, so during a
   live game it naturally reads **50–95%** (the broadcast-style graphic number most
@@ -254,8 +258,9 @@ The model:
    adds a small times-through-the-order bump (~+0.75 pts/pass, capped at the third look).
 6. **Live count:** mid-at-bat, the fresh-count estimate is multiplied in odds space by
    an empirically anchored count factor (3-1 » 0-0 » 0-2); walks are *not* hits, so
-   3-ball factors deliberately exclude the walk's value (see
-   `tools/count-model-derivation.mjs` for the derivation and anchors).
+   3-ball factors deliberately exclude the walk's value. (The original
+   `tools/count-model-derivation.mjs` derivation was not part of the upload — see
+   `flagged.html` F-003/U-2; the shipped count factors are documented in `assets/js/props.js`.)
 
 The headline number is the **hit probability for this plate appearance**; the chance
 of at least one more hit across the remaining expected plate appearances is shown as a
@@ -346,13 +351,14 @@ changes) is persistent across the website:
   (the original `docs/scoring-changes.md` was not uploaded — see F-003 on [`flagged.html`](flagged.html)).
 
 To *see and hear* the ⚠️ Runs at Risk surfaces without waiting for a live review,
-serve the repo and open the offline, fixture-driven preview — it stubs the API with
-the exact same deterministic payload the render test uses and makes no network
-request:
+run the offline, fixture-driven render test — it stubs the API with the exact same
+deterministic payload the pages use and makes no network request:
 
 ```bash
-python3 -m http.server 8000
-# then open http://localhost:8000/tools/run-risk-preview.html
+npm install --no-save jsdom     # dev-only, one time
+node tests/jsdom-render-test.mjs
+# (the original tools/run-risk-preview.html was not part of the upload — see
+#  flagged.html F-003; the render test above is the shipped equivalent)
 ```
 
 ## Deploy to GitHub Pages
