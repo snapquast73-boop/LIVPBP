@@ -6,3 +6,9 @@ Thumbs.db
 node_modules/
 .vscode/
 .idea/
+
+# Runtime state of server.mjs (feed-log JSON) — never published
+/data/
+
+# Local dev-only test dependency
+node_modules/

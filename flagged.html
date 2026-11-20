@@ -28,7 +28,7 @@
         <strong>Flagged and unverified items did not block publication.</strong>
         Any value that could not be confirmed from an official source was left
         blank in the app and is listed here — never inferred or filled in.
-        Session log: <a href="COORDINATION.md">COORDINATION.md</a>.
+        Session log, merge and deployment record: <a href="COORDINATION.md">COORDINATION.md</a>. Files were reconstructed by session <code>681bfa13</code> and integrated, re-verified and published by session <code>7e3aaa61</code> (rows below marked 824638/824474 are that session's checks).
       </p>
     </section>
 
@@ -42,9 +42,9 @@
           <td><a href="https://statsapi.mlb.com/api/v1/schedule?sportId=1&amp;date=2024-06-01&amp;hydrate=probablePitcher,linescore,decisions,review" target="_blank" rel="noopener">statsapi.mlb.com/api/v1/schedule</a></td>
         </tr>
         <tr>
-          <td>Game feed structure (gameData.teams/players/venue/status/review, liveData plays/linescore/boxscore/decisions)</td>
-          <td>Live response for game 744932 confirmed the shape; absent counters arrive as <code>gameData.review: {away:{}, home:{}}</code> and are shown blank, never zero-filled.</td>
-          <td><a href="https://statsapi.mlb.com/api/v1.1/game/744932/feed/live" target="_blank" rel="noopener">statsapi.mlb.com/api/v1.1/game/744932/feed/live</a></td>
+          <td>Game feed structure (gameData.teams/players/venue/status/review/absChallenges, liveData plays/linescore/boxscore/decisions)</td>
+          <td>Verified on game 744932 (2024): <code>gameData.review = {"hasChallenges":true,"away":{"used":1,"remaining":0},"home":{"used":0,"remaining":1}}</code>, and <b>no</b> <code>absChallenges</code> object at all — the ABS counter line is omitted, never zero-filled. Game 824638 (2026) returns <code>absChallenges = {"hasChallenges":true,"away":{"usedSuccessful":3,"usedFailed":0,"remaining":2},"home":{"usedSuccessful":5,"usedFailed":0,"remaining":2}}</code>, read as-is.</td>
+          <td><a href="https://statsapi.mlb.com/api/v1.1/game/744932/feed/live" target="_blank" rel="noopener">statsapi.mlb.com/api/v1.1/game/744932/feed/live</a> · <a href="https://statsapi.mlb.com/api/v1.1/game/824638/feed/live" target="_blank" rel="noopener">game/824638/feed/live</a></td>
         </tr>
         <tr>
           <td>Team ids, names, abbreviations (loaded at runtime, not hard-coded)</td>
@@ -60,6 +60,26 @@
           <td>Review status codes &amp; official reasons (statusCode registry)</td>
           <td>Verified: <code>MJ</code> “Player challenge: Pitch Result”, <code>NJ</code> “Umpire Challenge: Pitch Result”, <code>M*</code> “Manager challenge: …”, <code>N*</code> “Umpire review: …” (<code>NH</code> = Home run), <code>IH</code> “Instant Replay”.</td>
           <td><a href="https://statsapi.mlb.com/api/v1/gameStatus" target="_blank" rel="noopener">statsapi.mlb.com/api/v1/gameStatus</a></td>
+        </tr>
+        <tr>
+          <td>Review event shape on a play (<code>reviewDetails</code>)</td>
+          <td class="sev sev-med">Partially verified: one live event captured, <code>{"isOverturned":false,"inProgress":false,"reviewType":"MI","challengeTeamId":113}</code> on game 824474, play 65 — <code>MI</code> is "Manager challenge: Hit by pitch" in the registry above. Only that code was observed in a play payload; others are shown raw if the payload ever contains them (F-004).</td>
+          <td><a href="https://statsapi.mlb.com/api/v1/game/824474/playByPlay" target="_blank" rel="noopener">statsapi.mlb.com/api/v1/game/824474/playByPlay</a></td>
+        </tr>
+        <tr>
+          <td>Play result / runner movement fields used for runs-at-risk and the scoring-change diff</td>
+          <td>Verified: <code>result{eventType,description,awayScore,homeScore,isOut}</code>, <code>about{atBatIndex,halfInning,inning}</code>, <code>runners[].movement{…}</code>, <code>runners[].details{event,eventType,movementReason,isScoringEvent,rbi,earned,playIndex}</code> (observed <code>"isScoringEvent":true,"playIndex":3</code>).</td>
+          <td><a href="https://statsapi.mlb.com/api/v1/game/824474/playByPlay" target="_blank" rel="noopener">statsapi.mlb.com/api/v1/game/824474/playByPlay</a></td>
+        </tr>
+        <tr>
+          <td>Lean <code>fields</code> projection (whole-slate status sweep)</td>
+          <td>Verified: a projected request returns exactly the requested keys, so the sweep can be served without hydrations.</td>
+          <td><a href="https://statsapi.mlb.com/api/v1/schedule?sportId=1&amp;startDate=2026-08-20&amp;endDate=2026-08-28&amp;hydrate=review&amp;fields=dates,games,gamePk,review,hasChallenges,away,home,used,remaining" target="_blank" rel="noopener">projected schedule request</a></td>
+        </tr>
+        <tr>
+          <td>End-to-end render of the shipped pages</td>
+          <td>37/37 checks passed: scoreboard cards with the real 10–8 final, game header, play-by-play rows, review chips, linescore, all four game tabs, replay-feed rows, stats, tabs, sound/notification toggles, no uncaught errors. Run <code>node tests/jsdom-render-test.mjs</code>.</td>
+          <td><a href="tests/jsdom-render-test.mjs">tests/jsdom-render-test.mjs</a> · <a href="docs/verification-report.md">docs/verification-report.md</a></td>
         </tr>
         <tr>
           <td>Official-scorer pending-ruling event types</td>
@@ -139,6 +159,33 @@
       </p>
     </section>
   </main>
+
+    <section class="panel">
+      <h2>What could not be verified from this environment</h2>
+      <table class="flagged">
+        <tr><th>Item</th><th>Status</th><th>Why / how to close it</th></tr>
+        <tr>
+          <td>Running the pages against the live API from here</td>
+          <td class="sev sev-med">Not executed here</td>
+          <td>This build environment blocks direct sockets to <code>statsapi.mlb.com</code>; only a page-fetch channel reaches it (used for every row above). On any normal machine run <code>npm install --no-save jsdom &amp;&amp; node tests/jsdom-render-test.mjs --live</code> — it renders the real pages against the live official API.</td>
+        </tr>
+        <tr>
+          <td>Team logo URL on <code>mlbstatic.com</code></td>
+          <td class="sev sev-med">Unverified</td>
+          <td>The image host answered the page-fetch channel with HTTP 500 (binary asset), so the URL pattern could not be confirmed. It is the pattern documented in the original README; a missing logo is hidden by <code>onerror</code> and never breaks a row.</td>
+        </tr>
+        <tr>
+          <td>Player headshot URL</td>
+          <td class="sev sev-med">Unverified</td>
+          <td>The README only shows a truncated path (<code>…/v1/people/{playerId}/headshot/67/current</code>) and the host is unreachable from here. Same graceful degradation as logos.</td>
+        </tr>
+      </table>
+      <p class="card-note">
+        Full source table, per-response citations and the exact commands used:
+        <a href="docs/verification-report.md">docs/verification-report.md</a>.
+        Integration and deployment record: <a href="COORDINATION.md">COORDINATION.md</a>.
+      </p>
+    </section>
 
   <footer class="site-footer">
     <p>Unofficial fan project. Data via the public MLB StatsAPI

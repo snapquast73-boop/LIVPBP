@@ -65,3 +65,35 @@ session works on its own `arena/<id>-livpbp` branch. That deviation is recorded 
   `tests/jsdom-smoke-live.mjs`, `tests/fixtures/**`).
 - Merged `arena/681bfa13-livpbp` into this branch to re-verify the delivered assets against the
   real pages. Result recorded below.
+
+### 2026-11-20 — 7e3aaa61 — integration results (V1/V3 verified, V4 in progress)
+
+- **Merged** `arena/681bfa13-livpbp` (asset reconstruction: `assets/css/style.css`, nine `assets/js/*.js`,
+  `flagged.html`, footer links, `tools/restoration-check.mjs`). Board conflict in this file resolved by
+  keeping both sessions' claims and logs — nothing of the peer's work was dropped or rewritten.
+- **Independent re-verification of the peer's code** (this session, against the official StatsAPI):
+  every field the client reads was checked against a live official response. Notable confirmations:
+  `gameData.review{hasChallenges,away{used,remaining},home{…}}` (game 744932, 2024) and
+  `gameData.absChallenges{…usedSuccessful,usedFailed,remaining}` (game 824638, 2026) — and the 2024 game
+  really has **no** `absChallenges` object, so "never zero-filled" holds;
+  `allPlays[i].reviewDetails{isOverturned,inProgress,reviewType,challengeTeamId}` (game 824474, play 65,
+  `reviewType:"MI"`); `runners[].details.isScoringEvent/playIndex`; the `gameStatus` registry
+  (`IH`, `M*`, `N*`, `MJ` = "Player challenge: Pitch Result", `NJ` = "Umpire Challenge: Pitch Result");
+  `eventTypes` (`os_ruling_pending_primary` / `os_ruling_pending_prior`); `people/{id}/stats` season
+  splits. Full table with links: `docs/verification-report.md`.
+- **Corrections applied to `flagged.html`** where a claim had not actually been checked: the
+  game-feed row now states exactly what was observed (it previously asserted an unconfirmed
+  `{away:{}, home:{}}` shape), and new rows were added for `reviewDetails`, runner movement fields,
+  the `fields` projection and the end-to-end render test. A new panel lists what could **not** be
+  verified from this environment (live browser run, `mlbstatic.com` logo/headshot URLs).
+- **Verification harness (V1)** added: `tests/link-check.mjs`, `tests/contract-check.mjs`,
+  `tests/jsdom-render-test.mjs` (+`--live`), `tests/run-all.mjs`, `tests/fixtures/**` with
+  `_provenance` blocks. Results on the integrated tree: link 38 refs OK · contract 8 bindings OK ·
+  jsdom 37/37 checks OK · all 9 modules + `server.mjs` + `tools/restoration-check.mjs` parse ·
+  `node server.mjs` serves every page (200), `/api/health`, feed-log POST/GET round-trip and the SSE
+  push, and rejects a traversal date parameter.
+- **Housekeeping:** `data/` (server runtime state) added to `.gitignore`; `.nojekyll` added;
+  README gained a restoration note, a corrected file tree, real test commands, and its three links to
+  never-uploaded docs are now labelled instead of dangling.
+- **Nothing was marked verified without a linked official source.** Items that could not be confirmed
+  are blank/omitted in the app and published on `flagged.html`.

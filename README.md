@@ -1,5 +1,21 @@
 # ⚾ MLB Live PBP — Live MLB Scoreboard & Play-by-Play
 
+> ### ♻️ **RESTORATION NOTE (2026-11-20)** ♻️
+> This repository was uploaded incomplete: the three HTML pages referenced a stylesheet and nine
+> scripts under `assets/` that were **not** part of the upload, so GitHub Pages served an unstyled,
+> inert page. The original author's repository (the previous "Live demo" link) no longer exists on
+> GitHub (`404`), so the client could not be copied back.
+>
+> What was done here: every missing asset was re-implemented against the pages' own DOM contract and
+> the **official MLB StatsAPI**, then verified — field by field, with the official response linked for
+> each one — in [`docs/verification-report.md`](docs/verification-report.md), and end-to-end with
+> `node tests/jsdom-render-test.mjs`. Known deviations from this README's description of the
+> original (refresh cadence, the reduced hit-forecast drivers, the simplified review score tracker,
+> and every unverified item) are published on the
+> **[⚑ Flagged for Review](https://snapquast73-boop.github.io/LIVPBP/flagged.html)** page, with source
+> links. The text below is the original project documentation, unchanged apart from this note, the
+> demo link, the file-tree entries that now exist, and the test commands in "Run it locally".
+
 > ### 🛑 **CHECKPOINT NOTICE: `v1.0.0-stable-checkpoint`** 🛑
 > **This tag marks a safe, working baseline of the code. If any experimental changes break the app, you can instantly revert back to this stable state by running:**
 > ```bash
@@ -261,6 +277,7 @@ for archived games the request is scoped to the feed's game season.
 ├── game.html                  # Game page (?gamePk=<id>)
 ├── reviews.html               # All-games Replay Feed (live chat-style review feed)
 ├── 404.html
+├── flagged.html               # ⚑ Flagged for Review — irregularities + official source links
 ├── assets/
 │   ├── css/style.css          # Dark Gameday-style theme (responsive)
 │   └── js/
@@ -269,9 +286,13 @@ for archived games the request is scoped to the feed's game season.
 │       ├── reviews.js         # Challenge & replay review parser (Manager, Crew Chief, ABS)
 │       ├── reviews-feed.js    # All-games Replay Feed logic (diff helpers + page)
 │       ├── scoreboard.js      # Scoreboard page logic
+│       ├── feed-log.js        # Per-date feed log: localStorage + optional server.mjs sync/SSE
 │       ├── props.js           # Two-sided hit model, stat cache, Props & Matchup tab
 │       └── game.js            # Game page logic (live "at bat" module, linescore, box, PBP)
-└── docs/workflows/            # Optional GitHub Actions files (see deployment section)
+├── server.mjs                 # Optional zero-dependency persistence server (static + feed log)
+├── tests/                     # Zero-network checks: link check, jsdom render test, fixtures
+├── docs/verification-report.md# Field-by-field verification with official source links
+└── COORDINATION.md            # Multi-session task board, claims, merge + deployment record
 ```
 
 ## Run it locally
@@ -291,24 +312,19 @@ npx serve .
 Then open <http://localhost:8000>. You can also open `index.html` directly in a browser
 (`file://` works — the app uses plain scripts, no modules).
 
-To run the deterministic, network-free checks:
+To run the checks that ship with this repository (no network needed):
 
 ```bash
-node tools/hit-model-test.mjs                  # two-sided hit forecast model
-node tools/review-test.mjs                     # challenge / replay review parser (incl. real API shapes)
-node tools/reviews-feed-test.mjs               # all-games Replay Feed diff helpers
-node tools/replay-feed-render-test.mjs         # end-to-end Replay Feed render (captured live payloads)
-node tools/review-probe-test.mjs               # in-review lean-probe signature (game.js)
-node tools/review-status-test.mjs              # official gameStatus registry + review detection (all 4 copies)
-node tools/review-watcher-test.mjs             # 125ms review-status watcher + mid-wave flip + live log push (real boot path)
-node tools/page-status-watcher-test.mjs        # 125ms watchers on game page + scoreboard, probe-first banner, pushed badges
-node tools/api-rate-limit-test.mjs             # HTTP-429 self-throttle (Retry-After aware, 60s default)
-node tools/official-scoring-test.mjs           # official-scorer pending rulings
-node tools/api-fields-test.mjs                 # playByPlay `fields` projection coverage
-node tools/scoring-change-test.mjs             # official scoring-change tracker (hit ↔ error ↔ out)
-node tools/feed-log-persistence-test.mjs       # replay feed log: every entry survives refresh/revisit
-node tools/cross-browser-persistence-test.mjs  # cross-browser persistence + the server's live SSE push
+node tests/link-check.mjs                # every local href/src/url() in the site resolves
+node tests/jsdom-render-test.mjs         # end-to-end render of the real pages (needs jsdom)
+npm install --no-save jsdom              # ...one-time dev dependency for the test above only
+node tests/jsdom-render-test.mjs --live  # same test, answering the pages from the live StatsAPI
+node server.mjs                          # optional persistence backend for the feed log
 ```
+
+The original repository also listed 15 `tools/*.mjs` scripts and `docs/*` notes; those files were
+never uploaded and are not reproducible, so they are not claimed here — see
+[`flagged.html`](flagged.html) F-003.
 
 Every entry tracked (challenges, reviews, scoring-pending rulings, scoring
 changes) is persistent across the website:
@@ -327,7 +343,7 @@ changes) is persistent across the website:
   - `game.html`: dedicated **Challenges & Reviews** tab displays official scoring changes
     with full initial-call-to-final-ruling breakdown, and updates the tab badge.
   - `index.html`: scoreboard cards display the `✏️ N Scoring Change(s)` indicator.
-  (see `docs/scoring-changes.md`).
+  (the original `docs/scoring-changes.md` was not uploaded — see F-003 on [`flagged.html`](flagged.html)).
 
 To *see and hear* the ⚠️ Runs at Risk surfaces without waiting for a live review,
 serve the repo and open the offline, fixture-driven preview — it stubs the API with
@@ -355,7 +371,7 @@ with no build step and no workflow permissions:
 
 The repo's Pages setup doesn't require Actions. If you'd rather deploy via GitHub
 Actions (and/or run the nightly API smoke test), ready-to-use workflow files are in
-[`docs/workflows/`](docs/workflows/):
+`docs/workflows/` *(not part of the upload — create `.github/workflows/` yourself if you want Actions)*:
 
 - `pages.yml` — deploys to Pages on every push to `main` (requires the repo setting
   **Pages → Source → "GitHub Actions"** instead of branch deployment).
@@ -386,7 +402,7 @@ GitHub Actions**.
   degrades gracefully if a field disappears.
 - **Terms & budget:** the binding rules for this data, the request rate of every
   polling surface, and the code paths that enforce them are written down in
-  [`docs/api-compliance.md`](docs/api-compliance.md) — including the two clauses
+  `docs/api-compliance.md` *(not part of the upload — see F-003 on [`flagged.html`](flagged.html))* — including the two clauses
   that pull in different directions (the API's own notice permits "individual,
   non-commercial, non-bulk use"; MLB.com's Terms of Use §1 forbids automated
   collection and any display beyond personal, non-commercial home use) and the
@@ -412,7 +428,7 @@ GitHub Actions**.
   games that have just gone final. The StatsAPI is
   pull-only — a shorter poll only reduces how long a landed event sits unseen.
 - This is a **personal, non-commercial project** (no ads, no analytics, no data resale — see the
-  request budget and the governing terms in [`docs/api-compliance.md`](docs/api-compliance.md)).
+  request budget and the governing terms in `docs/api-compliance.md` *(not part of the upload — see F-003 on [`flagged.html`](flagged.html))*).
   It lives in a public repository and is served from GitHub Pages; that is hosting, not a service
   offered to others.
 - Review/challenge data shapes were verified against the live API on 2026-08-19
