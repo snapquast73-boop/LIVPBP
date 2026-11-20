@@ -146,6 +146,12 @@
           <td><a href="https://docs.github.com/en/pages/getting-started-with-github-pages/about-github-pages" target="_blank" rel="noopener">GitHub Pages (static hosting) docs</a></td>
         </tr>
         <tr>
+          <td>F-009</td><td class="sev sev-low">Low — found by parallel session, fixed</td>
+          <td>Two issues reported by the parallel session's PR #3 handoff: (1) linescore/box-score rows had no per-row source link and unnamed players got a substituted “Player &lt;id&gt;” label; (2) <code>404.html</code>'s relative stylesheet/home link breaks when GitHub Pages serves it for a nested unmatched path.</td>
+          <td>Fixed after the handoff: every linescore and batting/pitching row now links to its official per-game StatsAPI endpoint, absent names/values render as an unverified “–”, and 404.html resolves assets from the project root. Raised here so the change is visible rather than silent.</td>
+          <td><a href="https://statsapi.mlb.com/api/v1/game/744932/linescore" target="_blank" rel="noopener">statsapi.mlb.com/api/v1/game/{gamePk}/linescore</a> · <a href="https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages#types-of-github-pages-sites" target="_blank" rel="noopener">GitHub Pages site types (project paths)</a></td>
+        </tr>
+        <tr>
           <td>F-008</td><td class="sev sev-low">Low</td>
           <td>README's “Live demo” pointed at the original author's Pages site, whose repo is gone (F-002).</td>
           <td>Link updated to this project's own Pages site; all other README text unchanged.</td>
