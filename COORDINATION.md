@@ -421,7 +421,14 @@ Merge-conflict note (2026-11-20): rebasing onto `main` @ `9297edc` (PR #12, sess
 # Session `arena/1f908513-livpbp` — Final Live-StatsAPI & Replay-Audit (`RR-01`–`RR-06`) Integration
 
 - **Session ID:** `1f908513` (branch fixed by Arena to `arena/1f908513-livpbp`, branched from `aef1a74`).
-- **Pull Request:** [#21](https://github.com/snapquast73-boop/LIVPBP/pull/21)
+- **Pull Request:** [#21](https://github.com/snapquast73-boop/LIVPBP/pull/21) — **MERGED** at `2026-11-20T22:46:41Z` (merge commit [`f810cee4358a84ea44232bbc016d871fb3cdf037`](https://github.com/snapquast73-boop/LIVPBP/commit/f810cee4358a84ea44232bbc016d871fb3cdf037))
+- **CI & GitHub Pages Deployment Result:**
+  - PR #21 CI workflow run [`44831584375`](https://github.com/snapquast73-boop/LIVPBP/actions/runs/44831584375): `test` **pass** + `dom-smoke` **pass**.
+  - Live GitHub Pages deployment verified on `https://snapquast73-boop.github.io/LIVPBP/` for `f810cee`:
+    - [`/`](https://snapquast73-boop.github.io/LIVPBP/) — live scoreboard renders offseason slate notice + jump button to `Wed Oct 28, 2026`.
+    - [`/game.html?gamePk=824638`](https://snapquast73-boop.github.io/LIVPBP/game.html?gamePk=824638) — live game header (CIN 10, CHC 8, Wrigley Field, logos, W/L/SV decisions), 9-inning linescore with per-row official StatsAPI source links, official `pitchNumber` numbering across non-pitch timeouts, and `🚨 ABS Pitch Challenge — Overturned` chips all render against live StatsAPI.
+    - [`/reviews.html`](https://snapquast73-boop.github.io/LIVPBP/reviews.html) — live Replay Feed renders all 8 summary tiles, filter tabs, and scan status line.
+    - [`/flagged.html`](https://snapquast73-boop.github.io/LIVPBP/flagged.html) — live Flagged for Review page serves Section 9 (`1f908513` `L-1..L-4` & `RR-01..RR-06`) and blank confirmed-value cells on all unverified items.
 - **Merge conflict resolution log (2026-11-20 UTC):** Merged `origin/main` (`36b8c6b`, incorporating PRs #3–#20 across sessions `681bfa13`, `f8d351d0`, `f7276bda`, `7e3aaa61`, `346299e3`, `8a71f704`, `24011a61`, and `f132969c`) preserving 100% of all prior board entries and merged code verbatim.
 - **Official sources verified line by line (2026-11-20):**
   - [`/api/v1/people/682829/stats?stats=season,expectedStatistics`](https://statsapi.mlb.com/api/v1/people/682829/stats?stats=season,expectedStatistics&group=hitting&season=2026) — confirmed `expectedStatistics` exposes xBA in `stat.avg` (`".277"`), not `stat.xba` (`L-1`).
