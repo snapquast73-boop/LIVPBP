@@ -43,7 +43,7 @@ and **nothing else**. Consequences, verified by reading the shipped HTML:
 | A4 | README claims a stable tag `v1.0.0-stable-checkpoint` | README L3-8; `git tag` is empty, repo has 1 commit | Checkpoint instructions cannot work |
 | A5 | README's "Live demo" points at `buffedlizard55-lab.github.io/MLB-Live-PBP`; the upstream repo is **404** via the GitHub API (`/repos/buffedlizard55-lab/MLB-Live-PBP`) and GitHub code search for the project name returns 0 results | `curl api.github.com/repos/buffedlizard55-lab/MLB-Live-PBP` → 404 | The original source cannot be re-downloaded; `assets/` must be reconstructed from the contract in the HTML + README |
 | A6 | `server.mjs`: `decodeURIComponent(pathname)` can throw on a malformed `%` escape and take the process down; containment test `filePath.startsWith(REPO_DIR)` accepts sibling dirs sharing the prefix | `server.mjs` static handler | Small robustness defects (local server only; Pages never runs it) |
-| A7 | `data/` (server persistence store) not covered by `.gitignore` | `.gitignore` | Runtime JSON would be committed by accident |
+| A7 | `data/` (server persistence store) not covered by `.gitignore` | `.gitignore` | **Fixed** — `data/` added to `.gitignore` |
 
 ## Task board
 
@@ -59,7 +59,7 @@ and **nothing else**. Consequences, verified by reading the shipped HTML:
 | T8 Rebuild `assets/js/game.js` | in progress | `arena-f7276bda` | `assets/js/game.js` | All `game.html` element IDs |
 | T9 Rebuild `assets/js/props.js` (hit forecast) | in progress | `arena-f7276bda` | `assets/js/props.js` | log5 model per README §"Two-sided hit forecast" |
 | T10 Rebuild `assets/js/reviews-feed.js` | in progress | `arena-f7276bda` | `assets/js/reviews-feed.js` | `ReplayFeed.prevDay/nextDay/pickDate/today` + filters |
-| T11 Fix `server.mjs` crash/containment defects (A6), ignore `data/` (A7) | unclaimed | — | `server.mjs`, `.gitignore` | Flagged A6/A7; not needed for Pages |
+| T11 Fix `server.mjs` crash/containment defects (A6), ignore `data/` (A7) | data/ part done · server.mjs part unclaimed | `arena-f7276bda` | `.gitignore` (done), `server.mjs` (open) | A7 fixed; A6 left flagged as U-3 (server not used by Pages) |
 | T12 Verification report + Flagged for Review page | in progress | `arena-f7276bda` | `docs/verification-report.md`, `flagged.html` | Every claim carries an official source link; unverifiable values left blank |
 | T13 Integration: PR → `main`, merge, confirm Pages deploy | in progress | `arena-f7276bda` | repo root | PR link + merge result recorded here when done |
 

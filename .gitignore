@@ -6,3 +6,6 @@ Thumbs.db
 node_modules/
 .vscode/
 .idea/
+
+# Local server persistence store (runtime data, never committed)
+data/

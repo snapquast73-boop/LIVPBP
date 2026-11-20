@@ -1,0 +1,716 @@
+#!/usr/bin/env node
+/* ============================================================================
+ * tools/smoke-test.mjs — deterministic, network-free checks for the rebuilt app
+ *
+ * The original project's test suite (17 tools/*.mjs scripts) was not part of
+ * the upload, so this harness replaces it: it boots each real page in jsdom
+ * with the real scripts, stubs only `fetch` (with payloads whose shapes were
+ * verified against the live StatsAPI on 2026-11-20 — see
+ * docs/verification-report.md), and asserts on the rendered DOM.
+ *
+ *   node tools/smoke-test.mjs
+ * ==========================================================================*/
+import jsdomPkg from 'jsdom';
+const { JSDOM, VirtualConsole } = jsdomPkg;
+import path from 'node:path';
+import fs from 'node:fs/promises';
+import http from 'node:http';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const ROOT = path.resolve(__dirname, '..');
+
+let pass = 0;
+let fail = 0;
+const failures = [];
+
+function check(name, fn) {
+  return Promise.resolve()
+    .then(fn)
+    .then(() => { pass += 1; console.log(`  ✓ ${name}`); })
+    .catch((err) => {
+      fail += 1;
+      failures.push(`${name}: ${err && err.message}`);
+      console.log(`  ✗ ${name} — ${err && err.message}`);
+    });
+}
+
+function assert(cond, msg) {
+  if (!cond) throw new Error(msg || 'assertion failed');
+}
+
+/* ----------------------------------------------------------------- fixtures */
+
+/* Shape verified against GET /api/v1/schedule?sportId=1&date=2026-09-15
+ * &hydrate=probablePitcher,linescore,decisions,review (2026-11-20). */
+const SCHEDULE = {
+  totalGames: 3,
+  dates: [{
+    date: '2026-09-15',
+    totalGames: 3,
+    games: [
+      {
+        gamePk: 824466,
+        gameDate: '2026-09-15T22:40:00Z',
+        officialDate: '2026-09-15',
+        status: { abstractGameState: 'Final', codedGameState: 'F', detailedState: 'Final', statusCode: 'F' },
+        teams: {
+          away: {
+            team: { id: 119, name: 'Los Angeles Dodgers' },
+            score: 4, isWinner: true, leagueRecord: { wins: 90, losses: 70 },
+            probablePitcher: { id: 808967, fullName: 'Yoshinobu Yamamoto' },
+          },
+          home: {
+            team: { id: 113, name: 'Cincinnati Reds' },
+            score: 0, isWinner: false, leagueRecord: { wins: 70, losses: 90 },
+            probablePitcher: { id: 666157, fullName: 'Nick Lodolo' },
+          },
+        },
+        venue: { id: 2602, name: 'Great American Ball Park' },
+        doubleHeader: 'N', gamesInSeries: 4, seriesGameNumber: 2,
+        linescore: { currentInning: 9, inningState: 'End', isFinal: true, teams: { away: { runs: 4, hits: 9, errors: 0 }, home: { runs: 0, hits: 4, errors: 1 } } },
+        decisions: { winner: { fullName: 'Yoshinobu Yamamoto' }, loser: { fullName: 'Nick Lodolo' } },
+        review: { hasChallenges: false, away: { used: 0, remaining: 1 }, home: { used: 0, remaining: 1 } },
+      },
+      {
+        gamePk: 822925,
+        gameDate: '2026-09-15T22:40:00Z',
+        officialDate: '2026-09-15',
+        status: { abstractGameState: 'Final', codedGameState: 'F', detailedState: 'Final', statusCode: 'F' },
+        teams: {
+          away: { team: { id: 133, name: 'Athletics' }, score: 1, isWinner: false },
+          home: { team: { id: 139, name: 'Tampa Bay Rays' }, score: 2, isWinner: true },
+        },
+        venue: { id: 12, name: 'Tropicana Field' },
+        doubleHeader: 'N', gamesInSeries: 3, seriesGameNumber: 1,
+        review: { hasChallenges: false, away: { used: 0, remaining: 1 }, home: { used: 0, remaining: 1 } },
+      },
+      {
+        gamePk: 823109,
+        gameDate: '2026-09-15T23:10:00Z',
+        officialDate: '2026-09-15',
+        status: {
+          abstractGameState: 'Live', codedGameState: 'M', detailedState: 'Manager challenge: Tag play',
+          statusCode: 'MA', reason: 'Tag play',
+        },
+        teams: {
+          away: { team: { id: 136, name: 'Seattle Mariners' }, score: 2 },
+          home: { team: { id: 142, name: 'Minnesota Twins' }, score: 3 },
+        },
+        venue: { id: 3312, name: 'Target Field' },
+        doubleHeader: 'N', gamesInSeries: 3, seriesGameNumber: 2,
+        linescore: { currentInning: 6, inningState: 'Top', balls: 1, strikes: 2, outs: 1 },
+        review: { hasChallenges: true, away: { used: 1, remaining: 0 }, home: { used: 1, remaining: 1 } },
+      },
+    ],
+  }],
+};
+
+/* Official game-status registry rows (subset of GET /api/v1/gameStatus). */
+const GAME_STATUS = [
+  { abstractGameState: 'Live', codedGameState: 'M', detailedState: 'Manager challenge: Tag play', statusCode: 'MA', reason: 'Tag play', abstractGameCode: 'L' },
+  { abstractGameState: 'Live', codedGameState: 'M', detailedState: 'Manager challenge: Catch/drop in outfield', statusCode: 'MD', reason: 'Catch/drop in outfield', abstractGameCode: 'L' },
+  { abstractGameState: 'Live', codedGameState: 'M', detailedState: 'Player challenge: Pitch Result', statusCode: 'MJ', reason: 'Pitch Result', abstractGameCode: 'L' },
+  { abstractGameState: 'Live', codedGameState: 'N', detailedState: 'Umpire review: Tag play', statusCode: 'NA', reason: 'Tag play', abstractGameCode: 'L' },
+  { abstractGameState: 'Live', codedGameState: 'N', detailedState: 'Umpire review: Home run', statusCode: 'NH', reason: 'Home run', abstractGameCode: 'L' },
+  { abstractGameState: 'Live', codedGameState: 'I', detailedState: 'Instant Replay', statusCode: 'IH', reason: 'Review', abstractGameCode: 'L' },
+];
+
+/* reviewDetails shape verified against
+ * GET /api/v1/game/823109/playByPlay (2026-11-20): {isOverturned, inProgress,
+ * reviewType, challengeTeamId}. */
+function play(atBatIndex, extra = {}) {
+  return {
+    about: {
+      atBatIndex,
+      inning: 6,
+      halfInning: 'top',
+      isTopInning: true,
+      isComplete: true,
+      hasReview: false,
+      isScoringPlay: false,
+    },
+    result: { eventType: 'single', description: 'Batter singles.', rbi: 0, awayScore: 2, homeScore: 3, isOut: false },
+    count: { balls: 1, strikes: 2, outs: 1 },
+    matchup: {
+      batter: { id: 660271, fullName: 'Test Batter' },
+      pitcher: { id: 592789, fullName: 'Test Pitcher' },
+      batSide: { code: 'L' },
+      pitchHand: { code: 'R' },
+    },
+    runners: [],
+    playEvents: [],
+    ...extra,
+  };
+}
+
+const PBP_823109 = {
+  allPlays: [
+    play(25),
+    /* ABS pitch challenge: pitch-level reviewDetails, overturned. */
+    play(26, {
+      about: { atBatIndex: 26, inning: 6, halfInning: 'top', isTopInning: true, isComplete: true, hasReview: true, isScoringPlay: false },
+      playEvents: [
+        { index: 0, isPitch: true, count: { balls: 1, strikes: 0, outs: 1 }, details: { call: { description: 'Ball' }, description: 'Ball', type: { description: 'Four-Seam Fastball' } } },
+        { index: 1, isPitch: true, count: { balls: 1, strikes: 1, outs: 1 }, details: { call: { description: 'Called Strike' }, description: 'Called Strike', type: { description: 'Slider' } } },
+        { index: 2, isPitch: true, count: { balls: 1, strikes: 2, outs: 1 }, details: { call: { description: 'Called Strike' }, description: 'Called Strike' }, reviewDetails: { isOverturned: true, inProgress: false, reviewType: 'MJ', challengeTeamId: 136 } },
+      ],
+    }),
+    /* Boundary review that stands, no runs credited. */
+    play(48, {
+      about: { atBatIndex: 48, inning: 6, halfInning: 'top', isTopInning: true, isComplete: true, hasReview: true, isScoringPlay: false },
+      result: { eventType: 'home_run', description: 'Trap play in outfield, call stands.', rbi: 1, awayScore: 3, homeScore: 3, isOut: false },
+      reviewDetails: { isOverturned: false, inProgress: false, reviewType: 'MD', challengeTeamId: 142 },
+      runners: [
+        { details: { event: 'Home Run', eventType: 'home_run', isScoringEvent: true, rbi: true, playIndex: 3, runner: { fullName: 'Test Batter' } }, movement: { start: null, end: 'score', isOut: false } },
+      ],
+    }),
+    /* Manager challenge, overturned, with a run credited to the reviewed event. */
+    play(53, {
+      about: { atBatIndex: 53, inning: 7, halfInning: 'bottom', isTopInning: false, isComplete: true, hasReview: true, isScoringPlay: true },
+      result: { eventType: 'field_out', description: 'Runner ruled safe at home after review — overturned.', rbi: 1, awayScore: 3, homeScore: 4, isOut: false },
+      reviewDetails: { isOverturned: true, inProgress: false, reviewType: 'MA', challengeTeamId: 136 },
+      count: { balls: 0, strikes: 1, outs: 2 },
+      runners: [
+        { details: { event: 'Single', eventType: 'single', isScoringEvent: true, rbi: true, playIndex: 1, runner: { fullName: 'Runner One' } }, movement: { start: '3B', end: 'score', isOut: false } },
+        { details: { event: 'Stolen Base 2B', eventType: 'stolen_base_2b', isScoringEvent: false, rbi: false, playIndex: 1, runner: { fullName: 'Runner Two' } }, movement: { start: '1B', end: '2B', isOut: false } },
+      ],
+      playEvents: [
+        { index: 0, isPitch: true, count: { balls: 0, strikes: 0, outs: 2 }, details: { call: { description: 'In play, run(s)' }, description: 'In play, run(s)' } },
+        { index: 1, isPitch: true, count: { balls: 0, strikes: 1, outs: 2 }, details: { call: { description: 'In play, out(s)' }, description: 'In play, out(s)' } },
+      ],
+    }),
+    /* Umpire review (crew chief), stands, under review at the time of the scan. */
+    play(70, {
+      about: { atBatIndex: 70, inning: 8, halfInning: 'top', isTopInning: true, isComplete: false, hasReview: true, isScoringPlay: false },
+      reviewDetails: { isOverturned: false, inProgress: true, reviewType: 'NA' },
+      result: { eventType: 'field_out', description: 'Tag play under review.', awayScore: 3, homeScore: 4 },
+    }),
+    /* Official-scorer pending ruling (eventTypes registry code). */
+    play(71, {
+      result: { eventType: 'os_ruling_pending_primary', description: 'Official Scorer Ruling Pending', awayScore: 3, homeScore: 4 },
+    }),
+  ],
+};
+
+const FEED_823109 = {
+  gameData: {
+    game: { pk: 823109, season: 2026, seriesGameNumber: 2, gamesInSeries: 3 },
+    status: { abstractGameState: 'Live', codedGameState: 'M', detailedState: 'Manager challenge: Tag play', statusCode: 'MA', reason: 'Tag play' },
+    teams: {
+      away: { team: { id: 136, name: 'Seattle Mariners', abbreviation: 'SEA' }, record: { wins: 80, losses: 76 } },
+      home: { team: { id: 142, name: 'Minnesota Twins', abbreviation: 'MIN' }, record: { wins: 74, losses: 82 } },
+    },
+    players: {
+      ID660271: { id: 660271, fullName: 'Test Batter', primaryPosition: { abbreviation: 'CF' }, stats: { batting: { avg: '.280', atBats: 500, hits: 140 } } },
+      ID592789: { id: 592789, fullName: 'Test Pitcher', primaryPosition: { abbreviation: 'P' }, stats: { pitching: { era: '3.45', inningsPitched: '150.1', strikeOuts: 160, baseOnBalls: 40 } } },
+    },
+    venue: { name: 'Target Field' },
+    weather: { condition: 'Clear', temp: '68' },
+    datetime: { dateTime: '2026-09-15T23:10:00Z', officialDate: '2026-09-15' },
+    review: { hasChallenges: true, away: { used: 1, remaining: 0 }, home: { used: 1, remaining: 1 } },
+    absChallenges: { hasChallenges: true, away: { usedSuccessful: 0, usedFailed: 1, remaining: 2 }, home: { usedSuccessful: 1, usedFailed: 0, remaining: 2 } },
+  },
+  liveData: {
+    plays: {
+      allPlays: PBP_823109.allPlays,
+      currentPlay: {
+        about: { atBatIndex: 72, inning: 8, halfInning: 'top', isTopInning: true, isComplete: false },
+        result: { eventType: 'at_bat_start', description: '' },
+        count: { balls: 2, strikes: 1, outs: 1 },
+        matchup: {
+          batter: { id: 660271, fullName: 'Test Batter' },
+          pitcher: { id: 592789, fullName: 'Test Pitcher' },
+          batSide: { code: 'L' }, pitchHand: { code: 'R' },
+        },
+        runners: [], playEvents: [],
+      },
+    },
+    linescore: {
+      currentInning: 8, inningState: 'Top', isTopInning: true, balls: 2, strikes: 1, outs: 1,
+      teams: { away: { runs: 3, hits: 8, errors: 0 }, home: { runs: 4, hits: 9, errors: 1 } },
+      offense: {
+        batter: { id: 660271, fullName: 'Test Batter' },
+        onDeck: { id: 665742, fullName: 'On Deck Guy' },
+        inHole: { id: 669288, fullName: 'In Hole Guy' },
+        first: { id: 621566 }, second: null, third: { id: 641487 },
+      },
+      innings: Array.from({ length: 8 }, (_, i) => ({
+        num: i + 1,
+        ordinalNum: `${i + 1}${i === 0 ? 'st' : i === 1 ? 'nd' : i === 2 ? 'rd' : 'th'}`,
+        home: { runs: i % 2, hits: 1, errors: 0 },
+        away: { runs: i % 3 === 0 ? 1 : 0, hits: 1, errors: 0 },
+      })),
+    },
+    boxscore: {
+      teams: {
+        away: {
+          team: { id: 136, name: 'Seattle Mariners' },
+          batters: [660271], pitchers: [592789], battingOrder: [660271],
+          players: {
+            ID660271: { person: { id: 660271, fullName: 'Test Batter' }, position: { abbreviation: 'CF' }, stats: { batting: { atBats: 4, runs: 1, hits: 2, rbi: 1, baseOnBalls: 0, strikeOuts: 1, avg: '.280' } } },
+            ID592789: { person: { id: 592789, fullName: 'Test Pitcher' }, position: { abbreviation: 'P' }, stats: { pitching: { inningsPitched: '6.0', hits: 5, runs: 2, earnedRuns: 2, baseOnBalls: 1, strikeOuts: 7, era: '3.45' } } },
+          },
+          info: [{ label: 'Weather', value: '68 degrees, Clear.' }],
+        },
+        home: {
+          team: { id: 142, name: 'Minnesota Twins' },
+          batters: [], pitchers: [], battingOrder: [], players: {}, info: [],
+        },
+      },
+    },
+    decisions: {},
+  },
+};
+
+/* people/{id}/stats — shape from GET /api/v1/people/{id}/stats?stats=season,
+ * statSplits,gameLog,expectedStatistics&group=hitting&sitCodes=vl,vr */
+const HITTER_STATS = {
+  stats: [
+    { type: { displayName: 'season' }, group: { displayName: 'hitting' }, splits: [{ season: '2026', stat: { avg: '.280', atBats: 500, hits: 140, obp: '.350', slg: '.480' } }] },
+    { type: { displayName: 'expectedStatistics' }, group: { displayName: 'hitting' }, splits: [{ stat: { xba: '.272', xslg: '.470' } }] },
+    { type: { displayName: 'statSplits' }, group: { displayName: 'hitting' }, splits: [
+      { split: { code: 'vl', description: 'vs Left' }, stat: { avg: '.250', atBats: 120 } },
+      { split: { code: 'vr', description: 'vs Right' }, stat: { avg: '.292', atBats: 380 } },
+    ] },
+    { type: { displayName: 'gameLog' }, group: { displayName: 'hitting' }, splits: [
+      { date: '2026-09-10', stat: { atBats: 4, hits: 1 } },
+      { date: '2026-09-11', stat: { atBats: 5, hits: 2 } },
+      { date: '2026-09-13', stat: { atBats: 4, hits: 3 } },
+      { date: '2026-09-15', stat: { atBats: 4, hits: 0 } },
+    ] },
+  ],
+};
+
+const PITCHER_STATS = {
+  stats: [
+    { type: { displayName: 'season' }, group: { displayName: 'pitching' }, splits: [{ stat: { avg: '.238'.replace('.', '.'), atBats: 600 } }] },
+    { type: { displayName: 'expectedStatistics' }, group: { displayName: 'pitching' }, splits: [{ stat: { xba: '.231' } }] },
+    { type: { displayName: 'statSplits' }, group: { displayName: 'pitching' }, splits: [
+      { split: { code: 'vl', description: 'vs Left' }, stat: { avg: '.220', atBats: 200 } },
+      { split: { code: 'vr', description: 'vs Right' }, stat: { avg: '.248', atBats: 400 } },
+    ] },
+    { type: { displayName: 'gameLog' }, group: { displayName: 'pitching' }, splits: [] },
+  ],
+};
+
+const H2H_STATS = {
+  stats: [{ type: { displayName: 'vsPlayer' }, group: { displayName: 'hitting' }, splits: [{ stat: { atBats: 12, hits: 4, avg: '.333' } }] }],
+};
+
+/* ------------------------------------------------------------------ harness */
+
+function routeFetch(url) {
+  const u = String(url);
+  let body = null;
+  if (u.includes('/schedule?')) body = SCHEDULE;
+  else if (u.includes('/gameStatus')) body = GAME_STATUS;
+  else if (/\/game\/823109\/playByPlay/.test(u)) body = PBP_823109;
+  else if (/\/game\/824466\/playByPlay/.test(u)) body = { allPlays: [] };
+  else if (/\/game\/823109\/feed\/live/.test(u)) body = FEED_823109;
+  else if (/\/game\/824466\/feed\/live/.test(u)) body = FEED_823109;
+  else if (/\/people\/660271\/stats/.test(u)) body = u.includes('opposingPlayerId') ? H2H_STATS : HITTER_STATS;
+  else if (/\/people\/592789\/stats/.test(u)) body = PITCHER_STATS;
+  else if (u.includes('/api/feed-log')) body = { v: 1, date: '2026-09-15', entries: [], order: [], snapshots: {}, irregularities: {}, grace: {}, settled: [] };
+
+  if (body === null) {
+    return Promise.resolve({ ok: false, status: 404, json: async () => ({}) });
+  }
+  return Promise.resolve({
+    ok: true,
+    status: 200,
+    headers: { get: () => null },
+    json: async () => JSON.parse(JSON.stringify(body)),
+  });
+}
+
+/* Serve the repo over HTTP so jsdom loads the shipped <script>/<link> files
+ * exactly as a browser would (no stubbing of the app's own code). */
+const MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml',
+};
+
+const server = http.createServer(async (req, res) => {
+  const parsed = new URL(req.url, 'http://127.0.0.1');
+  let filePath = path.join(ROOT, decodeURIComponent(parsed.pathname));
+  if (parsed.pathname === '/') filePath = path.join(ROOT, 'index.html');
+  try {
+    const body = await fs.readFile(filePath);
+    res.writeHead(200, { 'Content-Type': MIME[path.extname(filePath)] || 'application/octet-stream' });
+    res.end(body);
+  } catch {
+    res.writeHead(404, { 'Content-Type': 'text/plain' });
+    res.end('not found');
+  }
+});
+await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+const PORT = server.address().port;
+
+async function boot(file, { query = '', beforeParse } = {}) {
+  const virtualConsole = new VirtualConsole();
+  virtualConsole.on('jsdomError', (err) => console.log('    jsdomError:', err.message));
+  virtualConsole.on('error', (...args) => console.log('    console.error:', ...args));
+
+  const dom = await JSDOM.fromURL(`http://127.0.0.1:${PORT}/${file}${query}`, {
+    runScripts: 'dangerously',
+    resources: 'usable',
+    pretendToBeVisual: true,
+    virtualConsole,
+    beforeParse(window) {
+      window.fetch = (url) => routeFetch(url);
+      window.AbortController = window.AbortController || class { constructor() { this.signal = { aborted: false, addEventListener() {} }; } abort() { this.signal.aborted = true; } };
+      window.scrollTo = () => {};
+      if (typeof window.EventSource !== 'function') {
+        window.EventSource = class { constructor() { this.listeners = {}; } addEventListener(n, f) { this.listeners[n] = f; } close() {} };
+      }
+      if (beforeParse) beforeParse(window);
+    },
+  });
+  await new Promise((r) => setTimeout(r, 120));
+  return dom;
+}
+
+function text(el) { return (el && el.textContent ? el.textContent : '').replace(/\s+/g, ' ').trim(); }
+
+/* -------------------------------------------------------------------- tests */
+
+console.log('\n[1] reviews.js — review parsing against verified payload shapes');
+{
+  const dom = new JSDOM('<!doctype html><html><body></body></html>', { runScripts: 'outside-only', url: 'http://localhost/' });
+  const w = dom.window;
+  w.fetch = (url) => routeFetch(url);
+  w.eval(await (await import('node:fs/promises')).readFile(path.join(ROOT, 'assets/js/api.js'), 'utf8'));
+  w.eval(await (await import('node:fs/promises')).readFile(path.join(ROOT, 'assets/js/reviews.js'), 'utf8'));
+
+  await check('describe(MJ) → ABS pitch challenge, reason "Pitch Result"', async () => {
+    await w.Reviews.loadRegistry();
+    const d = w.Reviews.describe('MJ');
+    assert(d.isABS === true, 'MJ must be ABS');
+    assert(d.reason === 'Pitch Result', 'reason should come from the registry, got ' + d.reason);
+    assert(d.typeLabel === 'ABS Pitch Challenge', 'label, got ' + d.typeLabel);
+  });
+
+  await check('describe(NH) → boundary call (official reason "Home run")', async () => {
+    const d = w.Reviews.describe('NH');
+    assert(d.isBoundary === true, 'NH must be a boundary call');
+    assert(d.family === 'umpire', 'NH family should be umpire, got ' + d.family);
+  });
+
+  await check('statusReview(MD) is a review; statusReview(F) is not', async () => {
+    assert(!!w.Reviews.statusReview({ statusCode: 'MD', reason: 'Catch/drop in outfield' }), 'MD must be a review');
+    assert(w.Reviews.statusReview({ statusCode: 'F', detailedState: 'Final' }) === null, 'Final must not be a review');
+  });
+
+  await check('extractReviews finds play-level, pitch-level and pending rows', async () => {
+    const rows = w.Reviews.extractReviews(PBP_823109.allPlays, {
+      gamePk: 823109,
+      teams: { away: { id: 136, name: 'Seattle Mariners' }, home: { id: 142, name: 'Minnesota Twins' } },
+    });
+    const codes = rows.map((r) => r.code).sort().join(',');
+    assert(codes === 'MA,MD,MJ,NA', 'expected MA,MD,MJ,NA — got ' + codes);
+    const abs = rows.find((r) => r.code === 'MJ');
+    assert(abs.isABS === true, 'MJ row should be ABS');
+    assert(abs.absPitchNumber === 3, 'pitch number should be 3, got ' + abs.absPitchNumber);
+    assert(abs.absCountBefore.balls === 1 && abs.absCountBefore.strikes === 1,
+      'count before should be 1-1, got ' + JSON.stringify(abs.absCountBefore));
+    assert(abs.outcome === 'Overturned', 'MJ outcome, got ' + abs.outcome);
+  });
+
+  await check('runs at risk only counts runs credited to the reviewed event', async () => {
+    const rows = w.Reviews.extractReviews(PBP_823109.allPlays, { gamePk: 823109, teams: { away: { id: 136 }, home: { id: 142 } } });
+    const manager = rows.find((r) => r.code === 'MA');
+    assert(manager.runsAtRiskCount === 1, 'MA should carry 1 run at risk, got ' + manager.runsAtRiskCount);
+    const boundary = rows.find((r) => r.code === 'MD');
+    /* The home run's scoring runner sits on playIndex 3, the reviewed event is
+     * the last event (index 0 here) — so it must NOT be counted. */
+    assert(boundary.runsAtRiskCount === 0, 'MD must not inherit an unrelated run, got ' + boundary.runsAtRiskCount);
+  });
+
+  await check('pending ruling is read from the API event-type registry', async () => {
+    const rows = w.Reviews.pendingRulings(PBP_823109.allPlays, { gamePk: 823109 });
+    assert(rows.length === 1, 'expected exactly 1 pending ruling, got ' + rows.length);
+    assert(rows[0].eventType === 'os_ruling_pending_primary', 'event type, got ' + rows[0].eventType);
+  });
+
+  await check('scoring-change diff flags reclassification and ignores score-only edits', async () => {
+    const before = w.Reviews.snapshotPlays([play(1, { result: { eventType: 'field_error', description: 'Reached on error', awayScore: 0, homeScore: 0, isOut: false }, count: { balls: 0, strikes: 0, outs: 0 } })]);
+    const after = w.Reviews.snapshotPlays([play(1, { result: { eventType: 'single', description: 'Singles.', awayScore: 0, homeScore: 0, isOut: false }, count: { balls: 0, strikes: 0, outs: 0 } })]);
+    const diff = w.Reviews.diffSnapshots(before, after);
+    assert(diff.changes.length === 1, 'error→single must be a scoring change, got ' + diff.changes.length);
+    assert(diff.edits.length === 0, 'no payload-edit rows expected, got ' + diff.edits.length);
+
+    const edited = w.Reviews.diffSnapshots(before, w.Reviews.snapshotPlays([play(1, { result: { eventType: 'field_error', description: 'Changed wording only', awayScore: 1, homeScore: 0, isOut: false }, count: { balls: 0, strikes: 0, outs: 0 } })]));
+    assert(edited.changes.length === 0 && edited.edits.length === 1, 'description/score edit must be flagged, not classified as a change');
+  });
+
+  await check('counter regression is detected, never zero-filled', async () => {
+    const up = w.Reviews.counterRegression({ away: { used: 1, remaining: 0 } }, { away: { used: 1, remaining: 1 } });
+    assert(up === null, 'a used-counter that holds steady must not be flagged: ' + JSON.stringify(up));
+    const notes = w.Reviews.counterRegression({ away: { used: 1, remaining: 1 } }, { away: { used: 0, remaining: 0 } });
+    assert(Array.isArray(notes) && notes.length === 2, 'expected 2 regression notes (used + remaining), got ' + JSON.stringify(notes));
+    assert(w.Reviews.counterRegression(null, { away: { used: 1 } }) === null, 'missing previous reading must not be invented');
+  });
+
+  dom.window.close();
+}
+
+console.log('\n[2] index.html — scoreboard renders from the schedule payload');
+{
+  const dom = await boot('index.html', { beforeParse(w) { w.localStorage.clear(); } });
+  __setDate(dom);
+  await new Promise((r) => setTimeout(r, 400));
+
+  await check('3 game cards with team names and scores', () => {
+    const cards = dom.window.document.querySelectorAll('.game-card');
+    assert(cards.length === 3, 'expected 3 cards, got ' + cards.length);
+    const html = text(dom.window.document.getElementById('game-list'));
+    assert(html.includes('Los Angeles Dodgers'), 'away team name missing');
+    assert(html.includes('Cincinnati Reds'), 'home team name missing');
+    assert(html.includes('Great American Ball Park'), 'venue missing');
+  });
+
+  await check('live game shows a review chip from the official status code', () => {
+    const html = text(dom.window.document.getElementById('game-list'));
+    assert(/Manager Challenge: Tag play/i.test(html), 'review chip missing: ' + html.slice(0, 300));
+  });
+
+  await check('filters exist and date navigation updates the label', () => {
+    const tabs = dom.window.document.querySelectorAll('#tabs .tab-btn');
+    assert(tabs.length >= 5, 'expected filter tabs, got ' + tabs.length);
+    assert(text(dom.window.document.getElementById('date-label')).length > 0, 'date label empty');
+  });
+
+  await check('no uncaught script errors left the status line in error state', () => {
+    const status = dom.window.document.getElementById('status-line');
+    assert(!status.classList.contains('is-error'), 'status line reports an error: ' + text(status));
+  });
+
+  dom.window.close();
+}
+
+console.log('\n[3] game.html — header, live module, linescore, PBP, tabs');
+{
+  const dom = await boot('game.html', {
+    query: '?gamePk=823109',
+    beforeParse(w) { w.localStorage.clear(); },
+  });
+  await new Promise((r) => setTimeout(r, 700));
+  const doc = dom.window.document;
+
+  await check('header shows both teams and the live status', () => {
+    const html = text(doc.getElementById('header-away')) + text(doc.getElementById('header-home')) + text(doc.getElementById('header-center'));
+    assert(html.includes('Seattle Mariners') && html.includes('Minnesota Twins'), 'team names missing: ' + html);
+    assert(/Manager challenge/i.test(html), 'official status label missing: ' + html);
+  });
+
+  await check('at-bat module shows count, outs, bases and on-deck', () => {
+    const html = text(doc.getElementById('live-panel'));
+    assert(html.includes('Test Batter'), 'batter missing');
+    assert(html.includes('On deck'), 'on-deck line missing');
+    assert(doc.getElementById('live-panel').querySelectorAll('.base-diamond i.on').length >= 1, 'no occupied base rendered');
+  });
+
+  await check('linescore table has one column per inning plus R/H/E', () => {
+    const table = doc.querySelector('#linescore-wrap table.linescore');
+    assert(!!table, 'linescore table missing');
+    const headers = table.querySelectorAll('thead th');
+    assert(headers.length === 9 + 3 + 1, 'expected 9 inning columns + R/H/E + spacer, got ' + headers.length);
+  });
+
+  await check('play-by-play renders every play with pitch detail', () => {
+    const plays = doc.querySelectorAll('#plays-wrap .play');
+    assert(plays.length === PBP_823109.allPlays.length, 'expected ' + PBP_823109.allPlays.length + ' plays, got ' + plays.length);
+    assert(doc.querySelectorAll('#plays-wrap .pitches li').length >= 3, 'pitch list missing');
+  });
+
+  await check('Challenges tab badge counts reviews, and the tab renders them', () => {
+    const badge = doc.getElementById('reviews-tab-count');
+    assert(badge.style.display !== 'none' && Number(badge.textContent) >= 4, 'badge should count reviews, got ' + badge.textContent);
+    dom.window.Game.setTab('reviews');
+    const html = text(doc.getElementById('reviews-wrap'));
+    assert(html.includes('ABS Pitch Challenge'), 'ABS review card missing');
+    assert(html.includes('Manager Challenge'), 'manager review card missing');
+  });
+
+  await check('box score tab renders batting + pitching lines', () => {
+    dom.window.Game.setTab('boxscore');
+    const html = text(doc.getElementById('boxscore-wrap'));
+    assert(html.includes('Seattle Mariners'), 'team heading missing');
+    assert(html.includes('Test Batter') && html.includes('Test Pitcher'), 'player rows missing');
+    assert(html.includes('ERA'), 'pitching header missing');
+  });
+
+  await check('reviews banner appears for the in-progress review', () => {
+    const html = text(doc.getElementById('live-review-banner-wrap'));
+    assert(/Under review/i.test(html), 'banner missing: ' + html);
+  });
+
+  dom.window.close();
+}
+
+console.log('\n[4] props.js — the two-sided hit forecast');
+{
+  const dom = await boot('game.html', { query: '?gamePk=823109', beforeParse(w) { w.localStorage.clear(); } });
+  await new Promise((r) => setTimeout(r, 900));
+
+  await check('forecast lands inside the documented clamp band with all six drivers', () => {
+    const f = dom.window.Game.state.forecast;
+    assert(!!f, 'no forecast produced');
+    assert(f.prob >= 0.10 && f.prob <= 0.78, 'probability out of clamp band: ' + f.prob);
+    assert(f.drivers.length === 6, 'expected 6 drivers, got ' + f.drivers.length);
+    assert(f.tier && f.tier.label, 'tier missing');
+    assert(f.atLeastOne > f.prob, '>=1 hit over N PAs must exceed the per-PA rate');
+  });
+
+  await check('season inputs came from the stub, not from a guessed baseline', () => {
+    const f = dom.window.Game.state.forecast;
+    assert(f.ok === true, 'forecast fell back to baseline: ' + f.label);
+    assert(String(f.batter.season.avg) === '.280', 'batter AVG not read, got ' + (f.batter.season && f.batter.season.avg));
+    assert(String(f.pitcher.expected.xba) === '.231', 'pitcher xBA not read');
+  });
+
+  await check('per-PA estimate is rendered on the live card', () => {
+    const html = text(dom.window.document.getElementById('live-panel'));
+    assert(/hit this PA/.test(html), 'forecast headline missing');
+  });
+
+  dom.window.close();
+}
+
+console.log('\n[5] reviews.html — the all-games Replay Feed');
+{
+  const dom = await boot('reviews.html', { beforeParse(w) { w.localStorage.clear(); } });
+  await new Promise((r) => setTimeout(r, 900));
+  const doc = dom.window.document;
+
+  await check('every event type is tracked (ABS, manager, boundary, umpire, pending)', () => {
+    const entries = dom.window.ReplayFeed.state.entries;
+    assert(entries.length >= 5, 'expected at least 5 tracked entries, got ' + entries.length);
+    const kinds = entries.map((e) => (e.review && e.review.code) || e.kind).join(',');
+    ['MJ', 'MD', 'MA', 'NA'].forEach((code) => assert(kinds.includes(code), 'missing tracked code ' + code + ' in ' + kinds));
+    assert(entries.some((e) => e.kind === 'pending'), 'pending ruling not tracked');
+  });
+
+  await check('All tab hides ABS rows, ABS tab shows them', () => {
+    const allHtml = text(doc.getElementById('feed-list'));
+    assert(!allHtml.includes('ABS Pitch Challenge'), 'All tab must exclude ABS rows');
+    dom.window.ReplayFeed.setFilter('abs');
+    const absHtml = text(doc.getElementById('feed-list'));
+    assert(absHtml.includes('ABS Pitch Challenge'), 'ABS tab must show ABS rows');
+    dom.window.ReplayFeed.setFilter('all');
+  });
+
+  await check('runs-at-risk row carries the official score tracker', () => {
+    dom.window.ReplayFeed.setFilter('risk');
+    const html = text(doc.getElementById('feed-list'));
+    assert(/run\(s\) at risk/.test(html), 'at-risk badge missing');
+    assert(/Actual after/.test(html), 'official score tracker missing: ' + html.slice(0, 400));
+    dom.window.ReplayFeed.setFilter('all');
+  });
+
+  await check('summary tiles count the tracked entries', () => {
+    const tiles = doc.querySelectorAll('#feed-stats .stat-tile');
+    assert(tiles.length >= 8, 'expected the summary tiles, got ' + tiles.length);
+    const html = text(doc.getElementById('feed-stats'));
+    assert(/ABS challenges/.test(html) && /Runs at risk/.test(html), 'tile labels missing');
+  });
+
+  await check('filters isolate ABS / scoring-change views', () => {
+    dom.window.ReplayFeed.setFilter('abs');
+    let html = text(doc.getElementById('feed-list'));
+    assert(html.includes('ABS Pitch Challenge'), 'ABS filter lost its rows');
+    assert(!html.includes('Official Scorer Ruling Pending'), 'ABS filter leaked non-ABS rows');
+    dom.window.ReplayFeed.setFilter('scoring');
+    html = text(doc.getElementById('feed-list'));
+    assert(html.length >= 0, 'scoring view crashed');
+    dom.window.ReplayFeed.setFilter('all');
+  });
+
+  await check('entries are persisted to localStorage per date', () => {
+    const raw = dom.window.localStorage.getItem('mlbp.feedlog.2026-09-15') || dom.window.localStorage.getItem('mlbp.feedlog.' + dom.window.MLB.todayISO());
+    assert(!!raw, 'no feed log written');
+    const parsed = JSON.parse(raw);
+    assert(Array.isArray(parsed.entries) && parsed.entries.length >= 5, 'log has no entries');
+  });
+
+  await check('sound / notification toggles flip state and persist the preference', () => {
+    dom.window.ReplayFeed.toggleSound();
+    assert(dom.window.ReplayFeed.state.soundOn === true, 'sound toggle did not flip');
+    assert(dom.window.localStorage.getItem('mlbp.pref.sound') === '1', 'sound preference not saved');
+    dom.window.ReplayFeed.toggleNotify();
+    assert(dom.window.ReplayFeed.state.notifyOn === true, 'notification toggle did not flip');
+  });
+
+  dom.window.close();
+}
+
+console.log('\n[6] feed-log.js — merge semantics');
+{
+  const dom = await boot('reviews.html', { beforeParse(w) { w.localStorage.clear(); } });
+  await new Promise((r) => setTimeout(r, 400));
+
+  await check('merge keeps both sides and never loses a row', () => {
+    const a = { v: 1, date: '2026-09-15', entries: [{ id: 'x', gamePk: 1, review: { id: 'x' }, firstSeen: 5, lastSeen: 5 }], order: [], snapshots: {}, irregularities: {}, grace: {}, settled: [] };
+    const b = { v: 1, date: '2026-09-15', entries: [{ id: 'y', gamePk: 2, review: { id: 'y' }, firstSeen: 6, lastSeen: 6 }], order: [], snapshots: {}, irregularities: {}, grace: {}, settled: [] };
+    const merged = dom.window.FeedLog.mergePayloads(a, b, '2026-09-15');
+    assert(merged.entries.length === 2, 'expected 2 merged entries, got ' + merged.entries.length);
+  });
+
+  await check('merge is idempotent (same payload twice changes nothing)', () => {
+    const a = { v: 1, date: '2026-09-15', entries: [{ id: 'x', gamePk: 1, review: { id: 'x' }, firstSeen: 5, lastSeen: 5 }], order: [], snapshots: {}, irregularities: {}, grace: {}, settled: [] };
+    const once = dom.window.FeedLog.mergePayloads(a, a, '2026-09-15');
+    const twice = dom.window.FeedLog.mergePayloads(once, a, '2026-09-15');
+    assert(twice.entries.length === 1, 'expected a single entry after the second merge, got ' + twice.entries.length);
+  });
+
+  await check('irregularity notes accumulate instead of being overwritten', () => {
+    const a = { v: 1, date: 'd', entries: [], order: [], snapshots: {}, irregularities: { 1: ['note a'] }, grace: {}, settled: [] };
+    const b = { v: 1, date: 'd', entries: [], order: [], snapshots: {}, irregularities: { 1: ['note b'] }, grace: {}, settled: [] };
+    const merged = dom.window.FeedLog.mergePayloads(a, b, 'd');
+    assert(merged.irregularities[1].length === 2, 'notes were lost: ' + JSON.stringify(merged.irregularities[1]));
+  });
+
+  dom.window.close();
+}
+
+console.log('\n[7] static asset integrity');
+{
+  const fs = await import('node:fs/promises');
+  const pages = ['index.html', 'game.html', 'reviews.html', '404.html', 'flagged.html'];
+  for (const page of pages) {
+    await check(`${page}: every local href/src resolves to a file`, async () => {
+      let html;
+      try { html = await fs.readFile(path.join(ROOT, page), 'utf8'); }
+      catch { throw new Error('page missing'); }
+      const refs = [...html.matchAll(/(?:href|src)="([^"]+)"/g)].map((m) => m[1])
+        .filter((u) => !/^(https?:|data:|#|mailto:)/.test(u));
+      assert(refs.length > 0, 'no local assets referenced');
+      for (const ref of refs) {
+        const clean = ref.split('#')[0].split('?')[0];
+        const target = path.join(ROOT, clean);
+        try { await fs.access(target); }
+        catch { throw new Error(`broken link: ${ref}`); }
+      }
+    });
+  }
+}
+
+function __setDate(dom) {
+  const picker = dom.window.document.getElementById('date-picker');
+  if (picker) {
+    picker.value = '2026-09-15';
+    picker.dispatchEvent(new dom.window.Event('change'));
+  }
+}
+
+server.close();
+console.log(`\n${pass} passed, ${fail} failed`);
+if (fail) {
+  console.log('\nFailures:');
+  failures.forEach((f) => console.log(' - ' + f));
+  process.exitCode = 1;
+}
