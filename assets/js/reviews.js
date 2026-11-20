@@ -25,8 +25,9 @@
    * docs/verification-report.md rows T-3/T-4).  Used only as an offline
    * fallback before/if the registry request resolves. */
   var FALLBACK_REASONS = {
+    IH: 'Review',
     MA: 'Tag play', MB: 'Touching a base', MC: 'Force play', MD: 'Catch/drop in outfield',
-    ME: 'Slide interference', MG: 'Grounds rule', MH: 'Home run', MI: 'Hit by pitch',
+    ME: 'Slide interference', MF: 'Close play at 1st', MG: 'Grounds rule', MH: 'Home run', MI: 'Hit by pitch',
     MJ: 'Pitch Result', MK: 'Record keeping', ML: 'Multiple issues', MM: 'Timing play',
     MN: 'Fan interference', MO: 'Fair/foul in outfield', MP: 'Home-plate collision',
     MQ: 'Rules check', MR: 'Passing runners', MS: 'Stadium boundary call',
@@ -136,7 +137,12 @@
     var events = (play && play.playEvents) || [];
     var target = null;
     if (typeof eventIndex === 'number' && isFinite(eventIndex)) target = Number(eventIndex);
-    else if (events.length) target = events.length - 1;
+    else if (events.length) {
+      var lastEv = events[events.length - 1];
+      target = (lastEv && typeof lastEv.index === 'number' && isFinite(lastEv.index))
+        ? Number(lastEv.index)
+        : events.length - 1;
+    }
     if (target === null) return runs;
 
     ((play && play.runners) || []).forEach(function (r) {
@@ -255,6 +261,21 @@
           possible[battingSide] = Math.max(0, possible[battingSide] - runs.length);
         }
 
+        /* Verified on live 2026 games (823424 atBatIndex 36, 824638 atBatIndex 72 & 86):
+         * PA-ending ABS pitch challenges (strikeout/walk) attach `reviewDetails` at
+         * `play.reviewDetails` (`playIndex === null`) rather than `playEvents[i]`.
+         * Resolve the final pitch index in `playEvents` so pitch number and counts
+         * before/after are still reported from the official playEvents array. */
+        var absIndex = playIndex;
+        if (absIndex === null && info.isABS && events.length) {
+          for (var ei = events.length - 1; ei >= 0; ei -= 1) {
+            if (events[ei] && (events[ei].isPitch || events[ei].count)) {
+              absIndex = ei;
+              break;
+            }
+          }
+        }
+
         out.push({
           id: key,
           gamePk: gamePk,
@@ -292,9 +313,9 @@
           possibleScore: possible,
           runsAtRisk: runs,
           runsAtRiskCount: runs.length,
-          absPitchNumber: playIndex === null ? null : playIndex + 1,
-          absCountBefore: playIndex === null ? null : countBefore(events, playIndex),
-          absCountAfter: playIndex === null ? null : countAfter(events, playIndex),
+          absPitchNumber: absIndex === null ? null : absIndex + 1,
+          absCountBefore: absIndex === null ? null : countBefore(events, absIndex),
+          absCountAfter: absIndex === null ? null : countAfter(events, absIndex),
           reviewDetails: details,
         });
       }

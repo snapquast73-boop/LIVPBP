@@ -126,7 +126,20 @@
   function seasonLine(feed, playerId, group) {
     var player = playerOf(feed, playerId);
     var stats = player && player.stats && player.stats[group];
-    return stats || null;
+    if (stats) return stats;
+    /* Official feed/live stores per-player season lines under
+     * liveData.boxscore.teams.{away,home}.players.ID<id>.seasonStats[group]
+     * (verified on game 823424 & 824638, 2026-11-20). */
+    var teams = feed && feed.liveData && feed.liveData.boxscore && feed.liveData.boxscore.teams;
+    if (!teams || !playerId) return null;
+    var key = 'ID' + playerId;
+    var sides = ['away', 'home'];
+    for (var i = 0; i < sides.length; i += 1) {
+      var boxPlayer = teams[sides[i]] && teams[sides[i]].players && teams[sides[i]].players[key];
+      var season = boxPlayer && boxPlayer.seasonStats && boxPlayer.seasonStats[group];
+      if (season) return season;
+    }
+    return null;
   }
 
   function signatureOf(feed) {

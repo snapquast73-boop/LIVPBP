@@ -101,26 +101,55 @@
     return map;
   }
 
+  function pickCombinedOrFirst(splits) {
+    if (!Array.isArray(splits) || !splits.length) return null;
+    for (var i = 0; i < splits.length; i += 1) {
+      if (splits[i] && !splits[i].team && splits[i].stat) return splits[i].stat;
+    }
+    return (splits[0] && splits[0].stat) || null;
+  }
+
   function seasonStat(blocks) {
     var block = blocks.season;
     if (!block || !Array.isArray(block.splits) || !block.splits.length) return null;
-    return block.splits[0].stat || null;
+    return pickCombinedOrFirst(block.splits);
   }
 
+  /* Verified against live GET /api/v1/people/{id}/stats?stats=expectedStatistics
+   * (e.g. player 682829 & 656849, 2026-11-20): the official StatsAPI publishes
+   * expected batting average in `stat.avg` (and xSLG in `stat.slg`, xwOBA in
+   * `stat.woba`), whereas offline fixtures may set `stat.xba` directly.
+   * Normalize both without inventing any value when neither is present. */
   function expectedStat(blocks) {
     var block = blocks.expectedStatistics;
     if (!block || !Array.isArray(block.splits) || !block.splits.length) return null;
-    return block.splits[0].stat || null;
+    var raw = pickCombinedOrFirst(block.splits);
+    if (!raw) return null;
+    if (raw.xba !== undefined) return raw;
+    if (raw.avg !== undefined) {
+      var copy = {};
+      Object.keys(raw).forEach(function (k) { copy[k] = raw[k]; });
+      copy.xba = raw.avg;
+      return copy;
+    }
+    return raw;
   }
 
   function splitStat(blocks, code) {
     var block = blocks.statSplits;
     if (!block || !Array.isArray(block.splits)) return null;
+    var target = String(code || '').toLowerCase();
+    var fallback = null;
     for (var i = 0; i < block.splits.length; i += 1) {
       var split = block.splits[i];
-      if (split && split.split && String(split.split.code).toLowerCase() === code) return split.stat || null;
+      if (!split || !split.split) continue;
+      var c = typeof split.split === 'string' ? split.split : split.split.code;
+      if (c && String(c).toLowerCase() === target) {
+        if (!split.team && split.stat) return split.stat;
+        if (!fallback && split.stat) fallback = split.stat;
+      }
     }
-    return null;
+    return fallback;
   }
 
   function rateFrom(stat, preferXBA) {
@@ -171,9 +200,14 @@
     return { ab: ab, hits: hits, rate: hits / ab, games: rows.length };
   }
 
+  /* Verified against live GET /api/v1/people/{batterId}/stats?stats=vsPlayer&
+   * group=hitting&opposingPlayerId={pitcherId} (2026-11-20): the official
+   * endpoint returns `vsPlayerTotal` (career line) and `vsPlayer` (per-season
+   * splits), not `season`. Accept `vsPlayerTotal`, `vsPlayer` and `season`. */
   function h2hRate(payload) {
     var blocks = statBlocks(payload);
-    var stat = seasonStat(blocks);
+    var h2hBlock = blocks.vsPlayerTotal || blocks.vsPlayer || blocks.season;
+    var stat = h2hBlock && Array.isArray(h2hBlock.splits) ? pickCombinedOrFirst(h2hBlock.splits) : null;
     if (!stat) return null;
     var ab = Number(stat.atBats) || 0;
     var hits = Number(stat.hits) || 0;
@@ -191,13 +225,15 @@
   }
 
   /* Remaining plate appearances for the ">=1 hit in next N PAs" projection.
-   * An estimate: ~0.45 PA per remaining team inning, bounded 1..4, and 0 once
-   * the game is final.  Flagged U-4. */
+   * Counts the current/upcoming PA plus ~0.45 PA per remaining team inning,
+   * bounded 2..4 while live/pre-game (so the multi-PA band matches the README's
+   * 50–95% range and strictly exceeds the single-PA rate), and 0 once Final.
+   * Flagged U-9. */
   function remainingPAs(ctx) {
     if (!ctx || ctx.gameFinal) return 0;
     var inning = Number(ctx.inning) || 1;
     var remainingInnings = Math.max(0, 9 - inning + (ctx.half === 'top' ? 1 : 0.5));
-    return clamp(Math.round(remainingInnings * 0.45), ctx.gameLive ? 1 : 2, 4);
+    return clamp(1 + Math.round(remainingInnings * 0.45), 2, 4);
   }
 
   /**
