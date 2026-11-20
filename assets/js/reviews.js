@@ -1,164 +1,587 @@
-/* reviews.js — challenge & replay-review parser.
- * Reconstructed 2026-11-20. Parses ONLY fields read from official payloads:
- *  - play.reviewDetails (live feed / playByPlay), read defensively: any of
- *    reviewType / challengeTeamId / inProgress / callDate / isOverturned /
- *    hasChallengesRemaining that the payload actually carries; absent fields
- *    stay null (never zero-filled, never guessed).
- *  - play.result.description / .event / .eventType (official play text),
- *    shown verbatim on the row so the outcome wording is auditable.
- *  - runners[] movements with details.isScoringEvent + details.playIndex
- *    (runs-at-risk: only runs credited to the very event under review).
- *  - gameData.review (manager counters) and gameData.absChallenges (ABS
- *    counters), read as-is. Pre-ABS seasons have no absChallenges object.
- * Code glosses were verified 2026-11-20 against the API's own registry,
- * GET /api/v1/gameStatus (https://statsapi.mlb.com/api/v1/gameStatus):
- * MJ = "Player challenge: Pitch Result", NJ = "Umpire Challenge: Pitch
- * Result", MA/MF (all M*) = "Manager challenge: …", NH (N*) = "Umpire
- * review: …" (NH specifically "Umpire review: Home run"), IH = "Instant
- * Replay". That registry governs statusCode; whether reviewDetails
- * .reviewType always uses the identical code set could not be confirmed
- * from a live review payload on 2026-11-20 (off-season, no live games),
- * so that one mapping is flagged in flagged.html (F-004). Unknown codes
- * are displayed raw, never glossed.
- */
-(function () {
+/* ============================================================================
+ * reviews.js — challenge / replay-review / ABS parser
+ *
+ * Everything here is read from the official payload; nothing is inferred:
+ *
+ *   - review TYPE comes from `reviewDetails.reviewType` (a gameStatus code —
+ *     MJ/NJ = pitch challenge, M* = manager challenge, N* = umpire review, IH =
+ *     instant replay) resolved through GET /api/v1/gameStatus, the API's own
+ *     registry of codes and official wording.
+ *   - OUTCOME comes from `reviewDetails.isOverturned` / `isOverturned`:
+ *     true = Overturned, false = Stands.  The payload has no separate
+ *     "Confirmed" flag, so the UI never claims that distinction.
+ *   - RUNS AT RISK only counts `runners[]` entries with
+ *     `details.isScoringEvent === true` whose `details.playIndex` is the
+ *     reviewed event — never a score change elsewhere in the plate appearance.
+ *   - SCORING CHANGES are detected by diffing each completed play's official
+ *     classification between polls (the payload carries no change marker).
+ * ==========================================================================*/
+(function (global) {
   'use strict';
 
-  var CODE_GLOSS = {
-    MJ: { kind: 'abs', label: 'ABS pitch challenge (player challenge: pitch result)' },
-    NJ: { kind: 'abs', label: 'ABS pitch challenge (umpire challenge: pitch result)' },
-    MA: { kind: 'challenge', label: 'Manager challenge' },
-    MF: { kind: 'challenge', label: 'Manager challenge' },
-    NH: { kind: 'boundary', label: 'Boundary / home-run review (umpire review)' }
+  var MLB = global.MLB;
+
+  /* Verified 2026-11-20 against GET /api/v1/gameStatus (see
+   * docs/verification-report.md rows T-3/T-4).  Used only as an offline
+   * fallback before/if the registry request resolves. */
+  var FALLBACK_REASONS = {
+    MA: 'Tag play', MB: 'Touching a base', MC: 'Force play', MD: 'Catch/drop in outfield',
+    ME: 'Slide interference', MG: 'Grounds rule', MH: 'Home run', MI: 'Hit by pitch',
+    MJ: 'Pitch Result', MK: 'Record keeping', ML: 'Multiple issues', MM: 'Timing play',
+    MN: 'Fan interference', MO: 'Fair/foul in outfield', MP: 'Home-plate collision',
+    MQ: 'Rules check', MR: 'Passing runners', MS: 'Stadium boundary call',
+    MT: 'Trap play in outfield', MU: 'Tag-up play', MV: 'Catchers Interference',
+    NA: 'Tag play', NB: 'Touching a base', NC: 'Force play', ND: 'Catch/drop in outfield',
+    NE: 'Slide interference', NF: 'Close play at 1st', NG: 'Grounds rule', NH: 'Home run',
+    NI: 'Hit by pitch', NJ: 'Pitch Result', NK: 'Record keeping', NL: 'Multiple issues',
+    NM: 'Timing play', NN: 'Fan interference', NO: 'Fair/foul in outfield',
+    NP: 'Home-plate collision', NQ: 'Rules check', NR: 'Passing runners',
+    NS: 'Stadium boundary call', NT: 'Trap play in outfield', NU: 'Tag-up play',
+    NW: 'Def Shift Violation',
   };
 
-  function classify(code, inProgress) {
-    if (inProgress) return { kind: 'under-review', label: 'Under review' };
-    if (!code) return { kind: 'review', label: 'Replay review' };
-    var g = CODE_GLOSS[code];
-    if (g) return { kind: g.kind, label: g.label };
-    if (/^N/.test(code)) return { kind: 'review', label: 'Umpire / crew review (' + code + ')' };
-    if (/^M/.test(code)) return { kind: 'challenge', label: 'Challenge (' + code + ')' };
-    return { kind: 'review', label: 'Replay review (' + code + ')' };
+  /* Reasons that the API classifies under the boundary-call family
+   * (potential home run / fair-foul / catch-or-trap at the wall). */
+  var BOUNDARY_REASONS = [
+    'Home run', 'Fair/foul in outfield', 'Catch/drop in outfield',
+    'Trap play in outfield', 'Stadium boundary call',
+  ];
+
+  /* Event types the API itself flags as an undecided official-scorer ruling
+   * (GET /api/v1/eventTypes, description "Official Scorer Ruling Pending"). */
+  var PENDING_RULING_TYPES = ['os_ruling_pending_primary', 'os_ruling_pending_prior'];
+
+  var HIT_TYPES = ['single', 'double', 'triple', 'home_run'];
+
+  var registryByCode = null;
+  var registryPromise = null;
+
+  function loadRegistry() {
+    if (!registryPromise) {
+      registryPromise = MLB.gameStatusRegistry()
+        .then(function (map) { registryByCode = map || null; return registryByCode; })
+        .catch(function () { registryByCode = null; return null; });
+    }
+    return registryPromise;
   }
 
-  function outcomeText(play) {
-    var rd = play.reviewDetails || {};
-    if (typeof rd.isOverturned === 'boolean') return rd.isOverturned ? 'Overturned' : 'Call stands / confirmed';
-    var desc = ((play.result || {}).description || '');
-    if (/overturn/i.test(desc)) return 'Overturned (per play description)';
-    if (/confirmed/i.test(desc)) return 'Confirmed (per play description)';
-    if (/stands/i.test(desc)) return 'Stands (per play description)';
-    if (rd.inProgress) return 'Under review';
-    return null; // not stated in the payload — left blank, never inferred
+  function describe(code) {
+    var clean = String(code || '').toUpperCase();
+    var row = registryByCode && registryByCode[clean];
+    var reason = (row && row.reason) || FALLBACK_REASONS[clean] || '';
+    var detailed = (row && row.detailedState) || '';
+
+    var family = 'review';
+    var isABS = clean === 'MJ' || clean === 'NJ';
+    if (isABS) family = 'abs';
+    else if (/^M/.test(clean)) family = 'manager';
+    else if (/^N/.test(clean)) family = 'umpire';
+    else if (clean === 'IH') family = 'replay';
+
+    var typeLabel =
+      isABS ? 'ABS Pitch Challenge' :
+      family === 'manager' ? 'Manager Challenge' :
+      family === 'umpire' ? 'Umpire Review' :
+      family === 'replay' ? 'Instant Replay Review' :
+      'Review';
+
+    return {
+      code: clean,
+      family: family,
+      isABS: isABS,
+      typeLabel: typeLabel,
+      reason: reason,
+      detailedState: detailed,
+      isBoundary: BOUNDARY_REASONS.indexOf(reason) !== -1 || clean === 'NH',
+    };
   }
 
-  // Runs credited to the reviewed event itself (details.playIndex match when
-  // the payload exposes playIndex; otherwise the reviewed play's own runners).
-  function runsAtRisk(play) {
-    var rd = play.reviewDetails || {};
-    var idx = (typeof rd.playIndex === 'number') ? rd.playIndex : null;
-    var runs = 0;
-    (play.runners || []).forEach(function (r) {
-      var d = (r && r.details) || {};
-      if (!d.isScoringEvent) return;
-      if (idx != null && typeof d.playIndex === 'number' && d.playIndex !== idx) return;
-      runs += 1;
+  function statusReview(status) {
+    var code = String((status && status.statusCode) || '').toUpperCase();
+    if (!code) return null;
+    var isReview = /^[MN]/.test(code) || code === 'IH';
+    if (!isReview) return null;
+    var info = describe(code);
+    return {
+      code: code,
+      family: info.family,
+      typeLabel: info.typeLabel,
+      reason: (status.reason || info.reason || ''),
+      isABS: info.isABS,
+      isBoundary: info.isBoundary,
+      detailedState: status.detailedState || info.detailedState,
+    };
+  }
+
+  function playsOf(payload) {
+    if (!payload) return [];
+    if (payload.liveData && payload.liveData.plays && payload.liveData.plays.allPlays) {
+      return payload.liveData.plays.allPlays;
+    }
+    return payload.allPlays || [];
+  }
+
+  function sideOfTeamId(gamePk, teamId, teams) {
+    if (!teamId || !teams) return 'unknown';
+    var id = Number(teamId);
+    if (teams.home && Number(teams.home.id) === id) return 'home';
+    if (teams.away && Number(teams.away.id) === id) return 'away';
+    return 'unknown';
+  }
+
+  /* Runs credited to one event of a play: `details.playIndex` must equal the
+   * reviewed event's index.  Never widened to the rest of the plate appearance. */
+  function runsForEvent(play, eventIndex) {
+    var runs = [];
+    var events = (play && play.playEvents) || [];
+    var target = null;
+    if (typeof eventIndex === 'number' && isFinite(eventIndex)) target = Number(eventIndex);
+    else if (events.length) target = events.length - 1;
+    if (target === null) return runs;
+
+    ((play && play.runners) || []).forEach(function (r) {
+      var d = r && r.details;
+      if (!d || d.isScoringEvent !== true) return;
+      if (Number(d.playIndex) !== target) return;
+      runs.push({
+        playIndex: Number(d.playIndex),
+        runnerName: (d.runner && d.runner.fullName) || '',
+        rbi: d.rbi === true,
+        movement: r.movement || null,
+      });
     });
     return runs;
   }
 
-  function parsePlay(play, ctx) {
-    var rd = play && play.reviewDetails;
-    if (!rd || typeof rd !== 'object') return null;
-    var hasSignal = rd.reviewType || rd.inProgress || rd.challengeTeamId || rd.callDate;
-    if (!hasSignal) return null;
-    var c = classify(rd.reviewType || null, !!rd.inProgress);
-    var runs = runsAtRisk(play);
-    var batterId = play.matchup && play.matchup.batter && play.matchup.batter.id;
-    var pitcherId = play.matchup && play.matchup.pitcher && play.matchup.pitcher.id;
-    return {
-      id: 'pbp-' + (play.atBatIndex != null ? play.atBatIndex : (play.playIndex != null ? play.playIndex : '')) +
-          '-' + (rd.reviewType || 'review') + '-' + (rd.callDate || ''),
-      kind: c.kind,
-      kindLabel: c.label,
-      code: rd.reviewType || null,
-      inProgress: !!rd.inProgress,
-      challengeTeamId: rd.challengeTeamId || null,
-      outcome: outcomeText(play),
-      atBatIndex: play.atBatIndex != null ? play.atBatIndex : null,
-      inning: play.about && play.about.inning != null ? play.about.inning : null,
-      halfInning: (play.about && play.about.halfInning) || null,
-      description: (play.result && play.result.description) || null,
-      event: (play.result && (play.result.event || play.result.eventType)) || null,
-      batterId: batterId || null,
-      pitcherId: pitcherId || null,
-      runsAtRisk: runs,
-      awayScore: play.result && play.result.awayScore != null ? play.result.awayScore : null,
-      homeScore: play.result && play.result.homeScore != null ? play.result.homeScore : null,
-      callDate: rd.callDate || null,
-      gamePk: (ctx && ctx.gamePk) || null,
-      source: 'StatsAPI play.reviewDetails'
-    };
-  }
-
-  function parsePlays(allPlays, ctx) {
-    var out = [];
-    (allPlays || []).forEach(function (p) {
-      var r = parsePlay(p, ctx || {});
-      if (r) out.push(r);
+  function runsScoredInPlay(play) {
+    var count = 0;
+    ((play && play.runners) || []).forEach(function (r) {
+      if (r && r.details && r.details.isScoringEvent === true) count += 1;
     });
-    return out;
+    return count;
   }
 
-  // Status-based "under review" detection: reads the official status fields
-  // only (no play-text matching). detailedState/statusCode/reason verbatim.
-  function statusUnderReview(status) {
-    if (!status) return null;
-    var code = status.statusCode || '';
-    var detail = status.detailedState || '';
-    if (/^(M|N|IH|MJ|NJ)/.test(code) || /review|challenge/i.test(detail)) {
-      return { statusCode: code || null, detailedState: detail || null, reason: status.reason || null };
+  function scoreOf(play, feed) {
+    var res = (play && play.result) || {};
+    var away = res.awayScore;
+    var home = res.homeScore;
+    if (typeof away === 'number' && typeof home === 'number') return { away: away, home: home };
+    var ls = feed && feed.liveData && feed.liveData.linescore;
+    var t = ls && ls.teams;
+    if (t && t.away && t.home && typeof t.away.runs === 'number' && typeof t.home.runs === 'number') {
+      return { away: t.away.runs, home: t.home.runs };
     }
     return null;
   }
 
-  // Official counters, read as-is. Returns null for a side the payload omits.
-  function sideCounter(obj) {
-    if (!obj || typeof obj !== 'object' || !Object.keys(obj).length) return null;
-    return obj;
-  }
-  function counters(feed) {
-    var gd = (feed && feed.gameData) || {};
-    return {
-      manager: gd.review ? { away: sideCounter(gd.review.away), home: sideCounter(gd.review.home) } : null,
-      abs: gd.absChallenges ? { away: sideCounter(gd.absChallenges.away), home: sideCounter(gd.absChallenges.home) } : null
-    };
-  }
-  function counterText(side, isAbs) {
-    if (!side) return null;
-    if (isAbs) {
-      var parts = [];
-      if (side.remaining != null) parts.push(side.remaining + ' ABS challenges left now');
-      var det = [];
-      if (side.usedSuccessful != null) det.push(side.usedSuccessful + ' successful');
-      if (side.usedFailed != null) det.push(side.usedFailed + ' failed');
-      if (det.length) parts.push('(' + det.join(' · ') + ')');
-      return parts.length ? parts.join(' ') : null;
-    }
-    if (side.remaining == null) return null;
-    var used = side.used != null ? ' (' + side.used + ' used)' : '';
-    return side.remaining + ' manager challenge' + (side.remaining === 1 ? '' : 's') + ' left now' + used;
+  function outcomeLabel(details) {
+    if (!details) return 'Unknown';
+    if (details.inProgress === true) return 'Under review';
+    if (details.isOverturned === true) return 'Overturned';
+    if (details.isOverturned === false) return 'Stands';
+    return 'Unknown';
   }
 
-  window.Reviews = {
-    CODE_GLOSS: CODE_GLOSS,
-    parsePlay: parsePlay,
-    parsePlays: parsePlays,
-    outcomeText: outcomeText,
-    runsAtRisk: runsAtRisk,
-    statusUnderReview: statusUnderReview,
-    counters: counters,
-    counterText: counterText
+  function countBefore(playEvents, index) {
+    if (!playEvents || index <= 0) return { balls: 0, strikes: 0 };
+    var prev = playEvents[index - 1];
+    var c = (prev && prev.count) || { balls: 0, strikes: 0 };
+    return { balls: Number(c.balls) || 0, strikes: Number(c.strikes) || 0 };
+  }
+
+  function countAfter(playEvents, index) {
+    var ev = playEvents && playEvents[index];
+    var c = (ev && ev.count) || null;
+    if (!c) return null;
+    return { balls: Number(c.balls) || 0, strikes: Number(c.strikes) || 0 };
+  }
+
+  function halfInningLabel(play) {
+    var about = (play && play.about) || {};
+    var half = about.halfInning || (about.isTopInning === false ? 'bottom' : 'top');
+    var inning = about.inning;
+    if (!inning) return '';
+    var word = String(half).toLowerCase().indexOf('top') === 0 ? 'Top' : 'Bot';
+    return word + ' ' + inning;
+  }
+
+  function challengerLabel(side, teams, gamePk) {
+    if (side === 'away' || side === 'home') {
+      var team = teams && teams[side];
+      var name = (team && (team.name || team.teamName)) || (side === 'away' ? 'Away' : 'Home');
+      return name;
+    }
+    return 'Not specified in payload';
+  }
+
+  /**
+   * extractReviews(plays, meta)
+   *   meta: { gamePk, teams:{away:{id,name},home:{id,name}}, feed }
+   * Returns one record per review event (play-level and pitch-level/ABS).
+   */
+  function extractReviews(plays, meta) {
+    meta = meta || {};
+    var gamePk = meta.gamePk;
+    var teams = meta.teams || {};
+    var out = [];
+    var seen = Object.create(null);
+
+    (plays || []).forEach(function (play) {
+      if (!play) return;
+      var about = play.about || {};
+      var atBatIndex = Number(about.atBatIndex);
+      var events = play.playEvents || [];
+      var playDesc = (play.result && play.result.description) || '';
+
+      function push(details, playIndex, eventDescription) {
+        if (!details) return;
+        var code = String(details.reviewType || '').toUpperCase();
+        if (!code && details.inProgress !== true && typeof details.isOverturned !== 'boolean') return;
+        var key = gamePk + ':' + atBatIndex + ':' + (playIndex === null ? 'p' : playIndex) + ':' + code;
+        if (seen[key]) return;
+        seen[key] = true;
+
+        var info = describe(code);
+        var side = sideOfTeamId(gamePk, details.challengeTeamId, teams);
+        var inning = Number(about.inning) || null;
+        var halfInning = about.halfInning || (about.isTopInning === false ? 'bottom' : 'top');
+        var battingSide = String(halfInning).toLowerCase().indexOf('top') === 0 ? 'away' : 'home';
+        var runs = runsForEvent(play, playIndex === null ? null : playIndex);
+        var score = scoreOf(play, meta.feed);
+        var scoreAfter = score;
+        var possible = null;
+        if (score && runs.length) {
+          possible = { away: score.away, home: score.home };
+          possible[battingSide] = Math.max(0, possible[battingSide] - runs.length);
+        }
+
+        out.push({
+          id: key,
+          gamePk: gamePk,
+          atBatIndex: atBatIndex,
+          playIndex: playIndex,
+          code: code,
+          family: info.family,
+          typeLabel: info.typeLabel,
+          reason: info.reason,
+          isABS: info.isABS,
+          isBoundary: info.isBoundary,
+          inning: inning,
+          halfInning: halfInning,
+          inningLabel: halfInningLabel(play),
+          battingSide: battingSide,
+          batter: {
+            id: (play.matchup && play.matchup.batter && play.matchup.batter.id) || null,
+            name: (play.matchup && play.matchup.batter && play.matchup.batter.fullName) || '',
+          },
+          pitcher: {
+            id: (play.matchup && play.matchup.pitcher && play.matchup.pitcher.id) || null,
+            name: (play.matchup && play.matchup.pitcher && play.matchup.pitcher.fullName) || '',
+          },
+          challengingTeamId: details.challengeTeamId || null,
+          challengerSide: side,
+          challenger: challengerLabel(side, teams, gamePk),
+          inProgress: details.inProgress === true,
+          isOverturned: typeof details.isOverturned === 'boolean' ? details.isOverturned : null,
+          outcome: outcomeLabel(details),
+          description: eventDescription || playDesc,
+          playDescription: playDesc,
+          eventType: (play.result && play.result.eventType) || '',
+          score: score,
+          scoreAfter: scoreAfter,
+          possibleScore: possible,
+          runsAtRisk: runs,
+          runsAtRiskCount: runs.length,
+          absPitchNumber: playIndex === null ? null : playIndex + 1,
+          absCountBefore: playIndex === null ? null : countBefore(events, playIndex),
+          absCountAfter: playIndex === null ? null : countAfter(events, playIndex),
+          reviewDetails: details,
+        });
+      }
+
+      /* Pitch-level reviews (ABS pitch challenges live here). */
+      events.forEach(function (ev, index) {
+        var details = ev && ev.reviewDetails;
+        if (!details) return;
+        push(details, index, ev.details && ev.details.description);
+      });
+
+      /* Play-level reviews (manager challenges, crew-chief/umpire reviews). */
+      var pitchLevelReview = events.some(function (ev) { return !!(ev && ev.reviewDetails); });
+      if (play.reviewDetails) push(play.reviewDetails, null, playDesc);
+      else if (about.hasReview === true && !pitchLevelReview) {
+        /* The play is flagged as reviewed but carries no reviewDetails block.
+         * Report it honestly instead of guessing a type. */
+        var key = gamePk + ':' + atBatIndex + ':p:';
+        if (!seen[key]) {
+          seen[key] = true;
+          out.push({
+            id: key,
+            gamePk: gamePk,
+            atBatIndex: atBatIndex,
+            playIndex: null,
+            code: '',
+            family: 'unknown',
+            typeLabel: 'Review (type not in payload)',
+            reason: '',
+            isABS: false,
+            isBoundary: false,
+            inning: Number(about.inning) || null,
+            halfInning: about.halfInning || null,
+            inningLabel: halfInningLabel(play),
+            battingSide: String(about.halfInning || '').toLowerCase().indexOf('top') === 0 ? 'away' : 'home',
+            batter: { id: (play.matchup && play.matchup.batter && play.matchup.batter.id) || null, name: (play.matchup && play.matchup.batter && play.matchup.batter.fullName) || '' },
+            pitcher: { id: (play.matchup && play.matchup.pitcher && play.matchup.pitcher.id) || null, name: (play.matchup && play.matchup.pitcher && play.matchup.pitcher.fullName) || '' },
+            challengingTeamId: null,
+            challengerSide: 'unknown',
+            challenger: 'Not specified in payload',
+            inProgress: about.isComplete === false,
+            isOverturned: null,
+            outcome: 'Unknown',
+            description: playDesc,
+            playDescription: playDesc,
+            eventType: (play.result && play.result.eventType) || '',
+            score: scoreOf(play, meta.feed),
+            scoreAfter: scoreOf(play, meta.feed),
+            possibleScore: null,
+            runsAtRisk: [],
+            runsAtRiskCount: 0,
+            absPitchNumber: null,
+            absCountBefore: null,
+            absCountAfter: null,
+            reviewDetails: null,
+            irregularity: 'Play flagged hasReview but the payload has no reviewDetails block — type and outcome are unverified.',
+          });
+        }
+      }
+    });
+
+    out.sort(function (a, b) {
+      if (a.atBatIndex !== b.atBatIndex) return a.atBatIndex - b.atBatIndex;
+      return (a.playIndex === null ? 9999 : a.playIndex) - (b.playIndex === null ? 9999 : b.playIndex);
+    });
+    return out;
+  }
+
+  /* Official-scorer pending ruling (hit vs error undecided) — from the API's
+   * own event-type registry, never from wording we invented. */
+  function isPendingRuling(play) {
+    var type = (play && play.result && play.result.eventType) || '';
+    return PENDING_RULING_TYPES.indexOf(type) !== -1;
+  }
+
+  function pendingRulings(plays, meta) {
+    var rows = [];
+    (plays || []).forEach(function (play) {
+      if (!isPendingRuling(play)) return;
+      var about = play.about || {};
+      var res = play.result || {};
+      rows.push({
+        id: (meta && meta.gamePk) + ':' + about.atBatIndex + ':pending',
+        gamePk: meta && meta.gamePk,
+        atBatIndex: Number(about.atBatIndex),
+        inningLabel: halfInningLabel(play),
+        eventType: res.eventType,
+        description: res.description || '',
+        batter: (play.matchup && play.matchup.batter && play.matchup.batter.fullName) || '',
+        pitcher: (play.matchup && play.matchup.pitcher && play.matchup.pitcher.fullName) || '',
+        score: scoreOf(play, meta && meta.feed),
+        teams: (meta && meta.teams) || null,
+        source: 'GET /api/v1/eventTypes — os_ruling_pending_primary / os_ruling_pending_prior (' +
+          (res.eventType === PENDING_RULING_TYPES[0] ? 'primary' : 'prior') + ')',
+      });
+    });
+    return rows;
+  }
+
+  /* --------------------------------------------------------- scoring changes */
+
+  function isHitEvent(eventType) { return HIT_TYPES.indexOf(eventType) !== -1; }
+
+  function classificationOf(play) {
+    var res = (play && play.result) || {};
+    var about = (play && play.about) || {};
+    var count = (play && play.count) || {};
+    var errors = 0;
+    ((play && play.runners) || []).forEach(function (r) {
+      var d = r && r.details;
+      if (d && /error/.test(String(d.eventType || ''))) errors += 1;
+    });
+    return {
+      atBatIndex: Number(about.atBatIndex),
+      eventType: res.eventType || '',
+      isOut: res.isOut === true,
+      outs: typeof count.outs === 'number' ? count.outs : null,
+      rbi: typeof res.rbi === 'number' ? res.rbi : null,
+      awayScore: typeof res.awayScore === 'number' ? res.awayScore : null,
+      homeScore: typeof res.homeScore === 'number' ? res.homeScore : null,
+      description: res.description || '',
+      isHit: isHitEvent(res.eventType),
+      errors: errors,
+      inningLabel: halfInningLabel(play),
+      batter: (play.matchup && play.matchup.batter && play.matchup.batter.fullName) || '',
+    };
+  }
+
+  /* Snapshot of every completed play's official classification, keyed by atBatIndex. */
+  function snapshotPlays(plays, previous) {
+    var map = Object.create(null);
+    (plays || []).forEach(function (play) {
+      var about = (play && play.about) || {};
+      if (about.isComplete !== true) return;
+      var c = classificationOf(play);
+      map[c.atBatIndex] = c;
+    });
+    return map;
+  }
+
+  /**
+   * diffSnapshots(prev, next) -> { changes: [], edits: [], vanished: [] }
+   *   changes  = official reclassification (hit<->error, out<->hit, extra base…)
+   *   edits    = same classification but a different description / RBI / score
+   *              (payload edit, flagged instead of "corrected")
+   *   vanished = a previously completed play that is no longer in the payload
+   */
+  function diffSnapshots(prev, next) {
+    var changes = [];
+    var edits = [];
+    var vanished = [];
+    if (!prev) return { changes: changes, edits: edits, vanished: vanished };
+
+    Object.keys(next).forEach(function (key) {
+      var before = prev[key];
+      var after = next[key];
+      if (!before) return;
+      var reclassified = before.eventType !== after.eventType ||
+        before.isOut !== after.isOut ||
+        (before.outs !== null && after.outs !== null && before.outs !== after.outs);
+      if (reclassified) {
+        changes.push({
+          atBatIndex: after.atBatIndex,
+          inningLabel: after.inningLabel,
+          batter: after.batter,
+          from: before,
+          to: after,
+          scoreAfter: { away: after.awayScore, home: after.homeScore },
+          attribution: 'Official scorer / Elias / club review — see mlb.com/official-information/scoring-changes',
+        });
+      } else if (before.description !== after.description || before.rbi !== after.rbi ||
+        before.awayScore !== after.awayScore || before.homeScore !== after.homeScore) {
+        edits.push({
+          atBatIndex: after.atBatIndex,
+          inningLabel: after.inningLabel,
+          batter: after.batter,
+          before: before,
+          after: after,
+          note: 'Payload edited without reclassification (description / RBI / score only) — flagged for review, not corrected.',
+        });
+      }
+    });
+
+    Object.keys(prev).forEach(function (key) {
+      if (!next[key]) vanished.push(prev[key]);
+    });
+
+    return { changes: changes, edits: edits, vanished: vanished };
+  }
+
+  /* --------------------------------------------------- official counters */
+
+  function managerCounters(review) {
+    if (!review) return null;
+    var away = review.away || null;
+    var home = review.home || null;
+    if (!away && !home) return null;
+    return {
+      hasChallenges: review.hasChallenges === true,
+      away: away ? { used: numOrNull(away.used), remaining: numOrNull(away.remaining) } : { used: null, remaining: null },
+      home: home ? { used: numOrNull(home.used), remaining: numOrNull(home.remaining) } : { used: null, remaining: null },
+    };
+  }
+
+  function absCounters(absChallenges) {
+    if (!absChallenges) return null;
+    function side(v) {
+      if (!v) return { usedSuccessful: null, usedFailed: null, remaining: null };
+      return {
+        usedSuccessful: numOrNull(v.usedSuccessful),
+        usedFailed: numOrNull(v.usedFailed),
+        remaining: numOrNull(v.remaining),
+      };
+    }
+    return {
+      hasChallenges: absChallenges.hasChallenges === true,
+      away: side(absChallenges.away),
+      home: side(absChallenges.home),
+    };
+  }
+
+  function numOrNull(v) {
+    var n = Number(v);
+    return isFinite(n) ? n : null;
+  }
+
+  /* Counter that moved backwards between two observations = irregularity.
+   * Never silently corrected (README §"challenges-remaining tracker"). */
+  function counterRegression(prev, next) {
+    if (!prev || !next) return null;
+    var notes = [];
+    ['away', 'home'].forEach(function (side) {
+      var p = prev[side] || {};
+      var n = next[side] || {};
+      ['used', 'usedSuccessful', 'usedFailed', 'remaining'].forEach(function (field) {
+        if (typeof p[field] === 'number' && typeof n[field] === 'number' && n[field] < p[field]) {
+          notes.push(side + '.' + field + ' moved backwards (' + p[field] + ' → ' + n[field] + ')');
+        }
+      });
+    });
+    return notes.length ? notes : null;
+  }
+
+  /* Largest-angle counter line used on feed rows and the live strip. */
+  function counterLine(meta) {
+    if (!meta) return '';
+    var parts = [];
+    if (meta.manager && meta.manager[meta.side]) {
+      var m = meta.manager[meta.side];
+      if (typeof m.remaining === 'number') {
+        parts.push(m.remaining + ' manager challenge' + (m.remaining === 1 ? '' : 's') + ' left now (' +
+          (typeof m.used === 'number' ? m.used + ' used' : 'used not published') + ')');
+      }
+    }
+    if (meta.abs && meta.abs[meta.side]) {
+      var a = meta.abs[meta.side];
+      if (typeof a.remaining === 'number') {
+        var bits = [];
+        if (typeof a.usedSuccessful === 'number') bits.push(a.usedSuccessful + ' successful');
+        if (typeof a.usedFailed === 'number') bits.push(a.usedFailed + ' failed');
+        parts.push(a.remaining + ' ABS challenge' + (a.remaining === 1 ? '' : 's') + ' left now (' +
+          (bits.length ? bits.join(' · ') : 'used not published') + ')');
+      }
+    }
+    return parts.join(' · ');
+  }
+
+  global.Reviews = {
+    loadRegistry: loadRegistry,
+    describe: describe,
+    statusReview: statusReview,
+    playsOf: playsOf,
+    runsForEvent: runsForEvent,
+    runsScoredInPlay: runsScoredInPlay,
+    scoreOf: scoreOf,
+    extractReviews: extractReviews,
+    pendingRulings: pendingRulings,
+    isPendingRuling: isPendingRuling,
+    snapshotPlays: snapshotPlays,
+    diffSnapshots: diffSnapshots,
+    classificationOf: classificationOf,
+    managerCounters: managerCounters,
+    absCounters: absCounters,
+    counterRegression: counterRegression,
+    counterLine: counterLine,
+    isHitEvent: isHitEvent,
+    BOUNDARY_REASONS: BOUNDARY_REASONS,
+    PENDING_RULING_TYPES: PENDING_RULING_TYPES,
   };
-})();
+}(window));
