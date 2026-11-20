@@ -105,7 +105,7 @@
         state.lastError = null;
         state.lastUpdated = Date.now();
         state.scheduled = state.games.map(function (g) { return g.gamePk; });
-        render();
+        renderIfChanged();
         statusLine(summaryText());
       })
       .catch(function (err) {
@@ -151,10 +151,29 @@
             }
           }
         });
-        if (changed) render();
+        if (changed) renderIfChanged();
       })
       .catch(function () { /* the ordinary poll owns error reporting */ })
       .then(function () { state.sweepInFlight = false; });
+  }
+
+  /* One request, cached 5 min: the latest date in the last 10 days with games. */
+  function offerRecentDate() {
+    if (state.lastGameDate !== undefined || state.lookingForRecent) return;
+    state.lookingForRecent = true;
+    var from = MLB.shiftISODate(state.date, -10);
+    MLB.scheduleRange(from, state.date)
+      .then(function (payload) {
+        var dates = ((payload && payload.dates) || []).filter(function (d) {
+          return d && d.totalGames > 0;
+        });
+        state.lastGameDate = dates.length ? dates[dates.length - 1].date : null;
+      })
+      .catch(function () { state.lastGameDate = null; })
+      .then(function () {
+        state.lookingForRecent = false;
+        if (state.lastGameDate) render();
+      });
   }
 
   function isLive(game) {
@@ -327,6 +346,29 @@
     }).join('');
   }
 
+  /* Skip DOM work when the baseball state did not change: a 500 ms poll must
+   * not rebuild identical cards (it would drop hover state and cost frames). */
+  function stateSignature() {
+    var bits = state.games.map(function (g) {
+      var ls = g.linescore || {};
+      return [g.gamePk,
+        g.status && g.status.statusCode,
+        g.teams && g.teams.away ? g.teams.away.score : '',
+        g.teams && g.teams.home ? g.teams.home.score : '',
+        ls.currentInning, ls.inningState, ls.balls, ls.strikes, ls.outs,
+        state.reviewByPk[g.gamePk] ? state.reviewByPk[g.gamePk].signature : '',
+        state.scoringChanges[g.gamePk] || 0].join(':');
+    });
+    return state.filter + '|' + state.date + '|' + bits.join('|');
+  }
+
+  function renderIfChanged() {
+    var sig = stateSignature();
+    if (sig === state.lastRenderSignature) return;
+    state.lastRenderSignature = sig;
+    render();
+  }
+
   function render() {
     renderTabs();
     renderBanner();
@@ -335,7 +377,14 @@
     var games = visibleGames();
     if (!state.games.length) {
       list.innerHTML = '<div class="panel" style="grid-column:1/-1;text-align:center;color:var(--muted)">' +
-        'No games scheduled for ' + UI.esc(MLB.formatDateLabel(state.date)) + '.</div>';
+        'No games scheduled for ' + UI.esc(MLB.formatDateLabel(state.date)) + '.' +
+        (state.lastGameDate
+          ? '<div style="margin-top:10px">Most recent date with games: ' +
+            UI.esc(MLB.formatDateLabel(state.lastGameDate)) + ' ' +
+            '<button class="btn" onclick="Scoreboard.setDate(\'' + state.lastGameDate + '\')">Show it</button></div>'
+          : '') +
+        '</div>';
+      offerRecentDate();
       return;
     }
     if (!games.length) {
@@ -431,6 +480,7 @@
     today: today,
     pickDate: pickDate,
     setFilter: setFilter,
+    setDate: setDate,
     refresh: fetchSchedule,
     state: state,
     LIVE_POLL_MS: LIVE_POLL_MS,

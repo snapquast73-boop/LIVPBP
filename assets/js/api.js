@@ -176,6 +176,15 @@
     }), { ttl: opts.ttl || 0, signal: opts.signal, retries: opts.retries });
   }
 
+  /* Date-range game counts — used only to point at the most recent date that
+   * actually had games (the scoreboard looks empty in the offseason). */
+  function scheduleRange(startDate, endDate, opts) {
+    opts = opts || {};
+    var qs = 'sportId=' + SPORT_ID + '&startDate=' + encodeURIComponent(startDate) +
+      '&endDate=' + encodeURIComponent(endDate) + '&fields=dates,date,totalGames';
+    return getJSON(API_ROOT + '/v1/schedule?' + qs, { ttl: 300000, retries: 0, signal: opts.signal });
+  }
+
   /* Lean slate status sweep: gamePk + status only (~2.4 KB for the whole day). */
   var STATUS_FIELDS = 'dates,games,gamePk,season,status,abstractGameState,codedGameState,' +
     'detailedState,statusCode,reason,startTimeTBD,abstractGameCode';
@@ -343,6 +352,7 @@
     SCHEDULE_HYDRATE: SCHEDULE_HYDRATE,
     getJSON: getJSON,
     schedule: schedule,
+    scheduleRange: scheduleRange,
     slateStatus: slateStatus,
     gameFeed: gameFeed,
     gameStatusLean: gameStatusLean,

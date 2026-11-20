@@ -350,7 +350,7 @@ const server = http.createServer(async (req, res) => {
 await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
 const PORT = server.address().port;
 
-async function boot(file, { query = '', beforeParse } = {}) {
+async function boot(file, { query = '', beforeParse, fetchImpl } = {}) {
   const virtualConsole = new VirtualConsole();
   virtualConsole.on('jsdomError', (err) => console.log('    jsdomError:', err.message));
   virtualConsole.on('error', (...args) => console.log('    console.error:', ...args));
@@ -361,7 +361,7 @@ async function boot(file, { query = '', beforeParse } = {}) {
     pretendToBeVisual: true,
     virtualConsole,
     beforeParse(window) {
-      window.fetch = (url) => routeFetch(url);
+      window.fetch = (url) => (fetchImpl || routeFetch)(url);
       window.AbortController = window.AbortController || class { constructor() { this.signal = { aborted: false, addEventListener() {} }; } abort() { this.signal.aborted = true; } };
       window.scrollTo = () => {};
       if (typeof window.EventSource !== 'function') {
@@ -697,6 +697,65 @@ console.log('\n[7] static asset integrity');
       }
     });
   }
+}
+
+console.log('\n[8] offseason empty state — points at the most recent date with games');
+{
+  const emptyToday = (url) => {
+    const u = String(url);
+    if (u.includes('startDate=')) {
+      return Promise.resolve({ ok: true, status: 200, headers: { get: () => null }, json: async () => ({ dates: [] }) });
+    }
+    if (u.includes('/schedule?')) {
+      return Promise.resolve({ ok: true, status: 200, headers: { get: () => null }, json: async () => ({ totalGames: 0, dates: [] }) });
+    }
+    return routeFetch(url);
+  };
+  const dom = await boot('index.html', { fetchImpl: emptyToday, beforeParse(w) { w.localStorage.clear(); } });
+  await new Promise((r) => setTimeout(r, 400));
+
+  await check('empty slate renders a message instead of an empty page', () => {
+    const html = text(dom.window.document.getElementById('game-list'));
+    assert(/No games scheduled/.test(html), 'empty-state message missing: ' + html);
+    assert(!dom.window.document.getElementById('status-line').classList.contains('is-error'),
+      'empty slate must not be reported as a network error');
+  });
+
+  await check('a range query is issued once to find the latest date with games', () => {
+    assert(dom.window.Scoreboard.state.lookingForRecent === false, 'range lookup did not settle');
+    assert(dom.window.Scoreboard.state.lastGameDate === null, 'no games in range should yield null, got ' + dom.window.Scoreboard.state.lastGameDate);
+  });
+
+  dom.window.close();
+}
+
+console.log('\n[9] offseason empty state — link to the latest date with games');
+{
+  const withHistory = (url) => {
+    const u = String(url);
+    if (u.includes('startDate=')) {
+      return Promise.resolve({
+        ok: true, status: 200, headers: { get: () => null },
+        json: async () => ({ dates: [{ date: '2026-09-14', totalGames: 0 }, { date: '2026-09-15', totalGames: 15 }] }),
+      });
+    }
+    if (u.includes('/schedule?')) {
+      return Promise.resolve({ ok: true, status: 200, headers: { get: () => null }, json: async () => ({ totalGames: 0, dates: [] }) });
+    }
+    return routeFetch(url);
+  };
+  const dom = await boot('index.html', { fetchImpl: withHistory, beforeParse(w) { w.localStorage.clear(); } });
+  await new Promise((r) => setTimeout(r, 500));
+
+  await check('the latest date with games is offered as a button', () => {
+    const st = dom.window.Scoreboard.state;
+    assert(st.lastGameDate === '2026-09-15', 'expected 2026-09-15, got ' + st.lastGameDate);
+    const html = text(dom.window.document.getElementById('game-list'));
+    assert(/Most recent date with games/.test(html), 'hint text missing: ' + html);
+    assert(dom.window.document.querySelector('#game-list button') !== null, 'no jump button rendered');
+  });
+
+  dom.window.close();
 }
 
 function __setDate(dom) {

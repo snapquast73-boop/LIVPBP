@@ -62,6 +62,7 @@
     lastScanAt: 0,
     timers: { scan: null, sweep: null, countdown: null },
     nextScanAt: 0,
+    lastRenderSignature: '',
   };
 
   function $(id) { return document.getElementById(id); }
@@ -390,14 +391,14 @@
         state.scanError = null;
         if (!due.length) {
           updateChrome();
-          if (state.filter !== 'scoring') render();
+          renderIfChanged();
           return null;
         }
         return runLimited(due, FETCH_CONCURRENCY, function (game) {
           return fetchGame(game).then(ingestGame);
         }).then(function () {
           persist();
-          render();
+          renderIfChanged();
           updateChrome();
         });
       })
@@ -435,7 +436,7 @@
             fetchGame(g).then(function (result) {
               ingestGame(result);
               persist();
-              render();
+              renderIfChanged();
               updateChrome();
             });
           }
@@ -687,6 +688,23 @@
         '<div class="feed-chips">' + chips.join('') + '</div>' +
       '</div>' +
     '</div>';
+  }
+
+  /* Same idea as the scoreboard: only touch the DOM when the tracked data
+   * actually changed, so a 250 ms scan does not re-create identical rows. */
+  function entriesSignature() {
+    return state.filter + '|' + state.entries.map(function (e) {
+      return [e.id, e.lastSeen, e.review && e.review.outcome, e.review && e.review.inProgress,
+        e.scoreTracker && e.scoreTracker.actual ? e.scoreTracker.actual.away + '-' + e.scoreTracker.actual.home : '',
+        e.scoreTracker && e.scoreTracker.before ? e.scoreTracker.before.away + '-' + e.scoreTracker.before.home : ''].join(':');
+    }).join('|');
+  }
+
+  function renderIfChanged() {
+    var sig = entriesSignature();
+    if (sig === state.lastRenderSignature) return;
+    state.lastRenderSignature = sig;
+    render();
   }
 
   function render() {
