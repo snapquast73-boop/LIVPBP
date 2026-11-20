@@ -255,6 +255,10 @@ send a pull request that edits the specific function and keeps `npm test` (40 ch
   (`global.X` publication pattern now recognised) · jsdom render **37/37** · `tools/smoke-test.mjs`
   and `tools/restoration-check.mjs` pass. PR: see the link recorded below after merge.
 
+## Session 346299e3 — published-site delivery check
+
+- **In progress**, owner `346299e3`, fixed branch `arena/346299e3-livpbp`. Scope: `tests/pages-delivery.mjs`, `.github/workflows/pages-delivery.yml`, this board entry. Check the actual Pages artifact against the deployed revision, independent of fixture tests. Existing client, data, flag-page and integration claims on other branches are left alone. [GitHub Pages configuration](https://api.github.com/repos/snapquast73-boop/LIVPBP/pages) and [deployment history](https://github.com/snapquast73-boop/LIVPBP/deployments/github-pages).
+
 ### 2026-11-20 — 7e3aaa61 — published (merge + deployment record)
 
 - **PR:** [#7 — Fix the game-page team header (flat feed/live shape) and publish the independent
@@ -279,3 +283,6 @@ send a pull request that edits the specific function and keeps `npm test` (40 ch
   U-5 is marked resolved; `docs/statsapi-field-map.md` no longer calls those behaviours deviations.
 - **Nothing is claimed that was not checked.** Items that remain unverifiable from this environment
   are marked as such on `flagged.html` §7 (V-7).
+## Session 346299e3 — published-site delivery check
+
+- **In progress**, owner `346299e3`, fixed branch `arena/346299e3-livpbp`. Scope: `tests/pages-delivery.mjs`, `.github/workflows/pages-delivery.yml`, this board entry. Check the actual Pages artifact against the deployed revision, independent of fixture tests. Existing client, data, flag-page and integration claims on other branches are left alone. [GitHub Pages configuration](https://api.github.com/repos/snapquast73-boop/LIVPBP/pages) and [deployment history](https://github.com/snapquast73-boop/LIVPBP/deployments/github-pages).
