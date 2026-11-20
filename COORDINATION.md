@@ -350,3 +350,60 @@ Claimed tasks (no other session active; previous sessions' work on `main` @ `5a0
 
 Merge-conflict note (2026-11-20): rebasing onto `main` @ `9297edc` (PR #12, session `346299e3`) conflicted in `COORDINATION.md` only — both sessions appended at the same spot. Resolved by keeping both entries verbatim; no other session's work discarded. Their `flagged.html`/`scoreboard.js` changes were taken as-is from `main`.
 
+### 2026-11-20 — 7e3aaa61 — final state (all tasks done)
+
+| Task | Status | Evidence |
+| --- | --- | --- |
+| T1 board + diagnosis | done | this file; flagged I-1/I-2/I-3 |
+| T2–T4 assets (session 681bfa13, then rebuilt by f7276bda, extended by later sessions) | done | `assets/**` on `main`; verified by `tests/` + `tools/smoke-test.mjs` |
+| V1 verification harness | done | `tests/{link-check,contract-check,jsdom-render-test,run-all}.mjs`, `tests/fixtures/**` |
+| V3 verification records | done | `docs/statsapi-field-map.md` (field-by-field, official links), `docs/verification-report.md`, `flagged.html` §1–§8 |
+| V4 integration + publish | done | PR #7 (merge `5a06fef`, Pages `built`) and PR #14 (merge `6a5243b`); tag `v1.0.0-stable-checkpoint` on `5a06fef` |
+| Final re-verification of the combined tree | done | `node tests/run-all.mjs` 4/4 groups · jsdom render 37/37 · `tools/smoke-test.mjs` 40/40 · `tools/restoration-check.mjs` all checks — run against the exact `origin/main` tree, then again after each merge |
+
+- **Live-site check (2026-11-20, after the builds):** `https://snapquast73-boop.github.io/LIVPBP/`
+  serves `/flagged.html` with this session's §7–§8 V-rows and the U-5 resolution, and
+  `/assets/js/game.js` on the live host contains the `teamNode()` fix — the deployed files are the
+  reviewed files, not a stale revision.
+- **Transient Pages errors:** several intermediate `main` commits (0a8e824, 9297edc, 31efd5e, 6a5243b,
+  e7154c0, 65fab417, be2ccb2) show `Page build failed` in the Pages builds API while the queue was
+  processing 7 deployments in ~5 minutes from parallel sessions. The tree itself is clean (no
+  symlinks, no binary/NUL files, no invalid UTF-8, `.nojekyll` present, `tools/smoke-test.mjs` and
+  `tests/` green), and a later build published the current content — verified by fetching the live
+  pages. No action was required beyond waiting; if it recurs, re-trigger with
+  `POST /repos/snapquast73-boop/LIVPBP/pages/builds`.
+- **Nothing is left claimed but unfinished.** Items that could not be verified from this environment
+  stay marked `Unverified` on `flagged.html` (U-1, U-8, U-9, U-10, U-11, V-7) and are never presented
+  as facts anywhere in the app.
+### Follow-up task board — session `arena/24011a61` (2026-11-20)
+
+| Task | Status | Session | File scope | Notes |
+|---|---|---|---|---|
+| Verify the post-PR #11 integration and record the final deployment/test result | done | `arena/24011a61-livpbp` | `COORDINATION.md` only | Verified the merged tree and deployed Pages output; no app code/assets changed. [PR #11](https://github.com/snapquast73-boop/LIVPBP/pull/11) · [Pages API](https://api.github.com/repos/snapquast73-boop/LIVPBP/pages). |
+
+Official references for this task: [GitHub PR #11](https://github.com/snapquast73-boop/LIVPBP/pull/11), [Pages configuration API](https://api.github.com/repos/snapquast73-boop/LIVPBP/pages), and [GitHub Pages documentation](https://docs.github.com/en/pages).
+
+#### Final verification and deployment record — session `arena/24011a61`
+
+- Verified integrated commit `e175f01f36c1842c37a1aa7e3f7a3316a9818679`; PR #11 merged at 2026-11-20T22:30:29Z. Its `test` and `dom-smoke` checks succeeded. [PR #11](https://github.com/snapquast73-boop/LIVPBP/pull/11) · [workflow run](https://github.com/snapquast73-boop/LIVPBP/actions/runs/44829497949)
+- Pages API reported `built` for that commit; configured as legacy deployment from `main` / root. [latest Pages build](https://api.github.com/repos/snapquast73-boop/LIVPBP/pages/builds/latest) · [Pages configuration](https://api.github.com/repos/snapquast73-boop/LIVPBP/pages) · [GitHub Pages publishing-source documentation](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site)
+- Network-free checks on an extracted copy of the integrated tree: `npm test` → 40 passed; `node tools/restoration-check.mjs` → ALL CHECKS PASSED; `node tests/run-all.mjs` → syntax OK, 39 local links OK, contract check OK, jsdom 37/37. [site-check workflow](https://github.com/snapquast73-boop/LIVPBP/blob/main/.github/workflows/site-check.yml) · [test runner](https://github.com/snapquast73-boop/LIVPBP/blob/main/tests/run-all.mjs)
+- Fetched the deployed [scoreboard](https://snapquast73-boop.github.io/LIVPBP/), [Replay Feed](https://snapquast73-boop.github.io/LIVPBP/reviews.html), and [Flagged for Review](https://snapquast73-boop.github.io/LIVPBP/flagged.html); each returned rendered content. On 2026-11-20 (offseason), zero scheduled games and zero replay rows were displayed, not treated as a broken request.
+- The upload lacked the frontend and the README-named upstream source was unavailable; therefore this is a reconstruction, not byte-for-byte source recovery. Known limits remain on the [Flagged for Review page](https://snapquast73-boop.github.io/LIVPBP/flagged.html); this follow-up makes no unverified claims.
+- Follow-up record PR: [#16](https://github.com/snapquast73-boop/LIVPBP/pull/16).
+---
+
+## Session `f132969c` — final functional pass (2026-11-20, branch `arena/f132969c-livpbp`)
+
+Claimed tasks (no other session active; previous sessions' work on `main` @ `5a06fef` preserved unedited except the items below):
+
+| Task | Status | File scope |
+|---|---|---|
+| F132-1 Confirm live site + Pages build for `5a06fef` | done | — (verified via `gh api .../pages/builds/latest` → `built`, and `fetch_page` renders of `/`, `/reviews.html`, `/flagged.html`) |
+| F132-2 Fix `server.mjs` crash + containment (A6/U-3) | done | `server.mjs`, `flagged.html` (U-3 status) |
+| F132-3 Fix README dead runnable refs (`tools/run-risk-preview.html`, `tools/review-test.mjs`, `tools/model-calibration-report.mjs`, `tools/count-model-derivation.mjs`) | done | `README.md` |
+| F132-4 Dedupe `reviews.html` footer Flagged links | done | `reviews.html` |
+| F132-5 Full test suite + official-source re-verification | done | — (40/40 smoke, 37/37 render, gameStatus registry re-fetched live) |
+| F132-6 PR → merge → confirm Pages → tag `v1.0.0-stable-checkpoint` → record here | in progress | repo root |
+
+Merge-conflict note (2026-11-20): rebasing onto `main` @ `9297edc` (PR #12, session `346299e3`) conflicted in `COORDINATION.md` only — both sessions appended at the same spot. Resolved by keeping both entries verbatim; no other session's work discarded. Their `flagged.html`/`scoreboard.js` changes were taken as-is from `main`.
