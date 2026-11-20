@@ -17,11 +17,17 @@
   function $(id) { return document.getElementById(id); }
   function player(feed, id) {
     var players = (feed && feed.gameData && feed.gameData.players) || {};
-    return players['ID' + id] || (id ? { id: id, fullName: 'Player ' + id } : null);
+    // No substituted labels: a player the payload does not name stays
+    // unnamed (rendered as an unverified blank by playerName).
+    return players['ID' + id] || (id ? { id: id, fullName: null } : null);
   }
   function playerName(feed, id) {
     var p = player(feed, id);
-    return p ? (p.fullName || ('Player ' + id)) : '—';
+    return (p && p.fullName) || '—';
+  }
+  function sourceCell(kind) {
+    var url = 'https://statsapi.mlb.com/api/v1/game/' + state.gamePk + '/' + kind;
+    return '<td><a href="' + url + '" target="_blank" rel="noopener" title="Official StatsAPI source for this row">source</a></td>';
   }
 
   function setTab(tab) {
@@ -173,14 +179,14 @@
       var t = ls.teams && ls.teams[totalKey] ? ls.teams[totalKey] : {};
       return '<tr><td>' + window.UI.esc(label) + '</td>' + cells +
         '<td><b>' + (t.runs != null ? t.runs : '–') + '</b></td><td>' + (t.hits != null ? t.hits : '–') +
-        '</td><td>' + (t.errors != null ? t.errors : '–') + '</td></tr>';
+        '</td><td>' + (t.errors != null ? t.errors : '–') + '</td>' + sourceCell('linescore') + '</tr>';
     }
     $('linescore-wrap').innerHTML = '<div class="live-label">Linescore</div><table><tr><th></th>' +
       innings.map(function (inn) { return '<th>' + inn.num + '</th>'; }).join('') +
-      '<th>R</th><th>H</th><th>E</th></tr>' +
+      '<th>R</th><th>H</th><th>E</th><th>Source</th></tr>' +
       row(window.UI.abbr((gd.teams.away || {}).id, (gd.teams.away || {}).abbreviation), 'away', 'away') +
       row(window.UI.abbr((gd.teams.home || {}).id, (gd.teams.home || {}).abbreviation), 'home', 'home') +
-      '</table>';
+      '</table><p class="card-note">“–” = not present in the official payload (unverified; never substituted). Each row links to its official StatsAPI source.</p>';
   }
 
   function renderPlays(feed) {
@@ -216,11 +222,11 @@
       var p = players['ID' + id];
       if (!p) return '';
       var st = (p.stats && p.stats[group]) || {};
-      return '<tr><td>' + window.UI.esc(p.person && p.person.fullName || ('Player ' + id)) + '</td>' +
+      return '<tr><td>' + window.UI.esc((p.person && p.person.fullName) || '—') + '</td>' +
         columns.map(function (c) {
           var v = st[c];
           return '<td>' + (v != null && v !== '' ? window.UI.esc(v) : '–') + '</td>';
-        }).join('') + '</tr>';
+        }).join('') + sourceCell('boxscore') + '</tr>';
     }).join('');
     return rows;
   }
@@ -234,9 +240,9 @@
     ['away', 'home'].forEach(function (side) {
       var t = box.teams[side] || {};
       var label = window.UI.esc(((gd.teams || {})[side] || {}).name || side);
-      html += '<h3>' + label + ' — Batting</h3><table><tr><th>Player</th><th>AB</th><th>R</th><th>H</th><th>RBI</th><th>BB</th><th>SO</th><th>HR</th></tr>' +
+      html += '<h3>' + label + ' — Batting</h3><table><tr><th>Player</th><th>AB</th><th>R</th><th>H</th><th>RBI</th><th>BB</th><th>SO</th><th>HR</th><th>Source</th></tr>' +
         statTable(t.players || {}, t.battingOrder || [], ['atBats', 'runs', 'hits', 'rbi', 'baseOnBalls', 'strikeOuts', 'homeRuns'], 'batting') + '</table>';
-      html += '<h3>' + label + ' — Pitching</h3><table><tr><th>Player</th><th>IP</th><th>H</th><th>R</th><th>ER</th><th>BB</th><th>SO</th><th>HR</th></tr>' +
+      html += '<h3>' + label + ' — Pitching</h3><table><tr><th>Player</th><th>IP</th><th>H</th><th>R</th><th>ER</th><th>BB</th><th>SO</th><th>HR</th><th>Source</th></tr>' +
         statTable(t.players || {}, t.pitchers || [], ['inningsPitched', 'hits', 'runs', 'earnedRuns', 'baseOnBalls', 'strikeOuts', 'homeRuns'], 'pitching') + '</table>';
     });
     $('boxscore-wrap').innerHTML = html;

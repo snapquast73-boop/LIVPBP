@@ -26,6 +26,7 @@ for (const page of pages) {
   for (const m of html.matchAll(/(?:src|href)="([^"]+)"/g)) {
     const u = m[1];
     if (/^(https?:|data:|#|mailto:)/.test(u)) continue;
+    if (/[\s'"]/.test(u) || u.includes('<')) continue; // JS-constructed URL (e.g. 404.html <base>)
     refs.add(u.split(/[?#]/)[0]);
   }
 }
