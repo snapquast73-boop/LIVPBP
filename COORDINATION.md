@@ -316,3 +316,20 @@ Prior integration PRs have already merged. Active claims on sibling branches (in
 Audit-only pull request: [#17 — status, checks, and merge result](https://github.com/snapquast73-boop/LIVPBP/pull/17). [Integration handoff on issue #1](https://github.com/snapquast73-boop/LIVPBP/issues/1#issuecomment-7052222793).
 
 Rebase note: PR #12 appended its separate Pages delivery-check claim to the same board location. Preserved both entries when rebasing the audit branch; no application-file conflicts occurred.
+
+### Follow-up task board — session `arena/24011a61` (2026-11-20)
+
+| Task | Status | Session | File scope | Notes |
+|---|---|---|---|---|
+| Verify the post-PR #11 integration and record the final deployment/test result | done | `arena/24011a61-livpbp` | `COORDINATION.md` only | Verified the merged tree and deployed Pages output; no app code/assets changed. [PR #11](https://github.com/snapquast73-boop/LIVPBP/pull/11) · [Pages API](https://api.github.com/repos/snapquast73-boop/LIVPBP/pages). |
+
+Official references for this task: [GitHub PR #11](https://github.com/snapquast73-boop/LIVPBP/pull/11), [Pages configuration API](https://api.github.com/repos/snapquast73-boop/LIVPBP/pages), and [GitHub Pages documentation](https://docs.github.com/en/pages).
+
+#### Final verification and deployment record — session `arena/24011a61`
+
+- Verified integrated commit `e175f01f36c1842c37a1aa7e3f7a3316a9818679`; PR #11 merged at 2026-11-20T22:30:29Z. Its `test` and `dom-smoke` checks succeeded. [PR #11](https://github.com/snapquast73-boop/LIVPBP/pull/11) · [workflow run](https://github.com/snapquast73-boop/LIVPBP/actions/runs/44829497949)
+- Pages API reported `built` for that commit; configured as legacy deployment from `main` / root. [latest Pages build](https://api.github.com/repos/snapquast73-boop/LIVPBP/pages/builds/latest) · [Pages configuration](https://api.github.com/repos/snapquast73-boop/LIVPBP/pages) · [GitHub Pages publishing-source documentation](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site)
+- Network-free checks on an extracted copy of the integrated tree: `npm test` → 40 passed; `node tools/restoration-check.mjs` → ALL CHECKS PASSED; `node tests/run-all.mjs` → syntax OK, 39 local links OK, contract check OK, jsdom 37/37. [site-check workflow](https://github.com/snapquast73-boop/LIVPBP/blob/main/.github/workflows/site-check.yml) · [test runner](https://github.com/snapquast73-boop/LIVPBP/blob/main/tests/run-all.mjs)
+- Fetched the deployed [scoreboard](https://snapquast73-boop.github.io/LIVPBP/), [Replay Feed](https://snapquast73-boop.github.io/LIVPBP/reviews.html), and [Flagged for Review](https://snapquast73-boop.github.io/LIVPBP/flagged.html); each returned rendered content. On 2026-11-20 (offseason), zero scheduled games and zero replay rows were displayed, not treated as a broken request.
+- The upload lacked the frontend and the README-named upstream source was unavailable; therefore this is a reconstruction, not byte-for-byte source recovery. Known limits remain on the [Flagged for Review page](https://snapquast73-boop.github.io/LIVPBP/flagged.html); this follow-up makes no unverified claims.
+- Follow-up record PR: [#16](https://github.com/snapquast73-boop/LIVPBP/pull/16).
