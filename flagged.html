@@ -136,7 +136,7 @@
           <td>I-1</td>
           <td class="wrap"><strong>All front-end assets were missing.</strong> <code>index.html</code>, <code>game.html</code> and <code>reviews.html</code> load <code>assets/css/style.css</code> plus <code>assets/js/{api,ui,reviews,feed-log,scoreboard,game,props,reviews-feed}.js</code>; none of those files existed, so every page loaded unstyled and inert.</td>
           <td class="wrap">Script/style tags in the three pages; <code>find . -type f</code> on the base commit shows no <code>assets/</code> directory; the deployed page renders only its static footer.</td>
-          <td class="wrap">Rebuilt all nine files from the contract in the pages + README. Verified with <code>tools/smoke-test.mjs</code> (36 checks).</td>
+          <td class="wrap">Rebuilt all nine files from the contract in the pages + README. Verified with <code>tools/smoke-test.mjs</code> (40 checks) and the parallel session's <code>tools/restoration-check.mjs</code>.</td>
         </tr>
         <tr>
           <td>I-2</td>
