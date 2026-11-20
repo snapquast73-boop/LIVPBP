@@ -50,18 +50,19 @@ and **nothing else**. Consequences, verified by reading the shipped HTML:
 | Task | Status | Session | File scope | Notes |
 |---|---|---|---|---|
 | T1 Audit repo vs README contract | done | `arena-f7276bda` | `COORDINATION.md` | Table above; sources in `docs/verification-report.md` |
-| T2 Rebuild `assets/css/style.css` | in progress | `arena-f7276bda` | `assets/css/style.css` | Dark Gameday-style theme for every class used by the three pages |
-| T3 Rebuild `assets/js/api.js` (StatsAPI client) | in progress | `arena-f7276bda` | `assets/js/api.js` | Endpoints exactly as README documents them |
-| T4 Rebuild `assets/js/ui.js` (logos, colors, count/runners) | in progress | `arena-f7276bda` | `assets/js/ui.js` | |
-| T5 Rebuild `assets/js/reviews.js` (review/ABS parser) | in progress | `arena-f7276bda` | `assets/js/reviews.js` | Official `gameStatus` registry is the source of review types |
-| T6 Rebuild `assets/js/feed-log.js` (persistence) | in progress | `arena-f7276bda` | `assets/js/feed-log.js` | localStorage + optional `POST/GET /api/feed-log` + SSE |
-| T7 Rebuild `assets/js/scoreboard.js` | in progress | `arena-f7276bda` | `assets/js/scoreboard.js` | `Scoreboard.prevDay/nextDay/pickDate/today` + docs `onclick` targets |
-| T8 Rebuild `assets/js/game.js` | in progress | `arena-f7276bda` | `assets/js/game.js` | All `game.html` element IDs |
-| T9 Rebuild `assets/js/props.js` (hit forecast) | in progress | `arena-f7276bda` | `assets/js/props.js` | log5 model per README §"Two-sided hit forecast" |
-| T10 Rebuild `assets/js/reviews-feed.js` | in progress | `arena-f7276bda` | `assets/js/reviews-feed.js` | `ReplayFeed.prevDay/nextDay/pickDate/today` + filters |
+| T2 Rebuild `assets/css/style.css` | done | `arena-f7276bda` | `assets/css/style.css` | Theme covers every class used by the four pages |
+| T3 Rebuild `assets/js/api.js` (StatsAPI client) | done | `arena-f7276bda` | `assets/js/api.js` | Endpoints exactly as README documents them |
+| T4 Rebuild `assets/js/ui.js` (logos, colors, count/runners) | done | `arena-f7276bda` | `assets/js/ui.js` | Abbreviations verified against `/api/v1/teams`; palette flagged U-1 |
+| T5 Rebuild `assets/js/reviews.js` (review/ABS parser) | done | `arena-f7276bda` | `assets/js/reviews.js` | Official `gameStatus` registry is the source of review types |
+| T6 Rebuild `assets/js/feed-log.js` (persistence) | done | `arena-f7276bda` | `assets/js/feed-log.js` | localStorage + optional `POST/GET /api/feed-log` + SSE |
+| T7 Rebuild `assets/js/scoreboard.js` | done | `arena-f7276bda` | `assets/js/scoreboard.js` | `Scoreboard.prevDay/nextDay/pickDate/today/setDate` + docs `onclick` targets |
+| T8 Rebuild `assets/js/game.js` | done | `arena-f7276bda` | `assets/js/game.js` | All `game.html` element IDs |
+| T9 Rebuild `assets/js/props.js` (hit forecast) | done | `arena-f7276bda` | `assets/js/props.js` | log5 model per README §"Two-sided hit forecast"; constants flagged U-2/U-9 |
+| T10 Rebuild `assets/js/reviews-feed.js` | done | `arena-f7276bda` | `assets/js/reviews-feed.js` | `ReplayFeed.prevDay/nextDay/pickDate/today` + filters |
 | T11 Fix `server.mjs` crash/containment defects (A6), ignore `data/` (A7) | data/ part done · server.mjs part unclaimed | `arena-f7276bda` | `.gitignore` (done), `server.mjs` (open) | A7 fixed; A6 left flagged as U-3 (server not used by Pages) |
-| T12 Verification report + Flagged for Review page | in progress | `arena-f7276bda` | `docs/verification-report.md`, `flagged.html` | Every claim carries an official source link; unverifiable values left blank |
-| T13 Integration: PR → `main`, merge, confirm Pages deploy | in progress | `arena-f7276bda` | repo root | PR link + merge result recorded here when done |
+| T12 Verification report + Flagged for Review page | needs review | `arena-f7276bda` | `docs/verification-report.md`, `flagged.html` | Published; 12 items flagged (U-1…U-11, I-8) |
+| T13 Integration: PR → `main`, merge, confirm Pages deploy | in progress | `arena-f7276bda` | repo root | PR **#6** → https://github.com/snapquast73-boop/LIVPBP/pull/6 |
+| T14 Test harness `tools/smoke-test.mjs` | done | `arena-f7276bda` | `tools/smoke-test.mjs`, `package.json` | `npm test` → 40 passed, 0 failed |
 
 ## Verification log
 
@@ -70,6 +71,26 @@ and **nothing else**. Consequences, verified by reading the shipped HTML:
 | 2026-11-20 | `arena-f7276bda` | Official game-status registry (review `statusCode`s: `M*`, `N*`, `IH`, `MJ`/`NJ`) | https://statsapi.mlb.com/api/v1/gameStatus | Confirmed: `MF`, `MA`, `MU`, `MM`, `MC`, `MP`, `ME`, `MH`, `MO`, `MD`, `MT`, `MI`, `MB`, … (manager challenges), `IH` "Instant Replay" + `reason:"Review"` |
 | 2026-11-20 | `arena-f7276bda` | Schedule shape + `officialDate` / `status` / `teams.*.score` fields | https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=2026-09-15 | Confirmed (15 games returned; fields as parsed) |
 | 2026-11-20 | `arena-f7276bda` | Deployed site currently broken (no `assets/`) | https://snapquast73-boop.github.io/LIVPBP/ | Confirmed: static shell only, scoreboard list empty |
+
+## Verification log (continued)
+
+| When | Session | What was checked | Official source | Result |
+|---|---|---|---|---|
+| 2026-11-20 | `arena-f7276bda` | `reviewDetails` shape + real review codes (`MJ`, `MD`, `MA`, `NA`) in a live game | https://statsapi.mlb.com/api/v1/game/823109/playByPlay | Confirmed `{isOverturned, inProgress, reviewType, challengeTeamId}` |
+| 2026-11-20 | `arena-f7276bda` | ABS counters per game | https://statsapi.mlb.com/api/v1.1/game/824466/feed/live | Confirmed `gameData.absChallenges.away/home{usedSuccessful,usedFailed,remaining}` |
+| 2026-11-20 | `arena-f7276bda` | Official-scorer pending ruling event types | https://statsapi.mlb.com/api/v1/eventTypes | Confirmed `os_ruling_pending_primary` / `os_ruling_pending_prior`, description "Official Scorer Ruling Pending" |
+| 2026-11-20 | `arena-f7276bda` | Official club abbreviations | https://statsapi.mlb.com/api/v1/teams?sportId=1 | Confirmed all 30 |
+| 2026-11-20 | `arena-f7276bda` | Whole site renders + persists (network-free) | `npm test` (jsdom + local HTTP server) | 40 passed, 0 failed |
+| 2026-11-20 | `arena-f7276bda` | Local server serves pages/assets + feed-log round-trip | `node server.mjs` + curl | All 200 with correct content types; POST→GET round-trips |
+
+## PR / merge record
+
+| Field | Value |
+|---|---|
+| Branch | `arena/f7276bda-livpbp` |
+| Pull request | [#6](https://github.com/snapquast73-boop/LIVPBP/pull/6) |
+| Merge | pending — recorded after the merge completes |
+| Pages deploy | pending |
 
 ## Request log
 
