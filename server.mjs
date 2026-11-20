@@ -393,15 +393,23 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  let safePath = path.normalize(decodeURIComponent(pathname)).replace(/^(\.\.[\/\\])+/, '');
+  let decodedPathname;
+  try {
+    decodedPathname = decodeURIComponent(pathname);
+  } catch (_) {
+    sendError(res, 400, 'Malformed URL path');
+    return;
+  }
+
+  let safePath = path.normalize(decodedPathname).replace(/^(\.\.[\/\\])+/, '');
   if (safePath === '/' || safePath === '') safePath = '/index.html';
   if (safePath === '/reviews') safePath = '/reviews.html';
   if (safePath === '/game') safePath = '/game.html';
 
-  const filePath = path.join(REPO_DIR, safePath);
+  const filePath = path.resolve(REPO_DIR, '.' + (safePath.startsWith('/') || safePath.startsWith('\\') ? safePath : '/' + safePath));
 
-  // Security check: ensure path is within REPO_DIR
-  if (!filePath.startsWith(REPO_DIR)) {
+  // Security check: ensure path stays strictly within REPO_DIR (reject sibling dirs sharing prefix)
+  if (filePath !== REPO_DIR && !filePath.startsWith(REPO_DIR + path.sep)) {
     sendError(res, 403, 'Forbidden');
     return;
   }
