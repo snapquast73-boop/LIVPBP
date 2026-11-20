@@ -407,13 +407,22 @@ Claimed tasks (no other session active; previous sessions' work on `main` @ `5a0
 | F132-6 PR → merge → confirm Pages → tag `v1.0.0-stable-checkpoint` → record here | in progress | repo root |
 
 Merge-conflict note (2026-11-20): rebasing onto `main` @ `9297edc` (PR #12, session `346299e3`) conflicted in `COORDINATION.md` only — both sessions appended at the same spot. Resolved by keeping both entries verbatim; no other session's work discarded. Their `flagged.html`/`scoreboard.js` changes were taken as-is from `main`.
+### 2026-11-20 — f132969c — INTEGRATION DONE
+
+- [PR #13](https://github.com/snapquast73-boop/LIVPBP/pull/13) **MERGED** (merge commit `be2ccb227dcf61ee92ad06b403c03f11ea3e5374`, 2026-11-20T22:37:26Z). Site checks on the PR branch: `test` + `dom-smoke` both **pass**.
+- GitHub Pages deploy for `be2ccb2` confirmed live: `https://snapquast73-boop.github.io/LIVPBP/flagged.html` section 8 (W-1…W-4) and the U-3 "Fixed" note are serving on the deployed site (verified via page fetch, since the REST API was rate-limited by parallel sessions at the time — reset 23:07 UTC). `/` and `/reviews.html` render as before.
+- Tag `v1.0.0-stable-checkpoint` already exists on the remote (points at `5a06fef`, created by a parallel session) — left untouched, so U-5 is resolved and the README revert instruction works. Not moved to `be2ccb2` to avoid rewriting another session's tag.
+- Rebase conflicts during integration were `COORDINATION.md`-only (parallel sessions appending at the same spot: `346299e3`, `8a71f704`, and PRs #14/#16/#18). Each resolved by keeping both entries verbatim; no other session's work discarded. Final task statuses: F132-1…F132-6 all **done**.
+- Remaining flagged items for owner review (unchanged, on `flagged.html`): U-1, U-2, U-6, U-7, U-8, U-9, U-10, U-11, I-8, F-001…F-009. U-3 and U-5 are now Fixed.
+
 
 ---
 
 # Session `arena/1f908513-livpbp` — Final Live-StatsAPI & Replay-Audit (`RR-01`–`RR-06`) Integration
 
 - **Session ID:** `1f908513` (branch fixed by Arena to `arena/1f908513-livpbp`, branched from `aef1a74`).
-- **Merge conflict resolution log (2026-11-20 UTC):** Merged `origin/main` preserving 100% of all prior sessions' board entries (`681bfa13`, `f8d351d0`, `f7276bda`, `7e3aaa61`, `346299e3`, `8a71f704`, `24011a61`, `f132969c`) and adopted `f132969c`'s equivalent `server.mjs` fix without discarding any session's work.
+- **Pull Request:** [#21](https://github.com/snapquast73-boop/LIVPBP/pull/21)
+- **Merge conflict resolution log (2026-11-20 UTC):** Merged `origin/main` (`36b8c6b`, incorporating PRs #3–#20 across sessions `681bfa13`, `f8d351d0`, `f7276bda`, `7e3aaa61`, `346299e3`, `8a71f704`, `24011a61`, and `f132969c`) preserving 100% of all prior board entries and merged code verbatim.
 - **Official sources verified line by line (2026-11-20):**
   - [`/api/v1/people/682829/stats?stats=season,expectedStatistics`](https://statsapi.mlb.com/api/v1/people/682829/stats?stats=season,expectedStatistics&group=hitting&season=2026) — confirmed `expectedStatistics` exposes xBA in `stat.avg` (`".277"`), not `stat.xba` (`L-1`).
   - [`/api/v1/people/682829/stats?stats=vsPlayer&opposingPlayerId=656849`](https://statsapi.mlb.com/api/v1/people/682829/stats?stats=vsPlayer&group=hitting&opposingPlayerId=656849) & [`/api/v1/people/656849/stats?stats=season,statSplits`](https://statsapi.mlb.com/api/v1/people/656849/stats?stats=season,statSplits&group=pitching&sitCodes=vl,vr&season=2026) — confirmed `vsPlayerTotal`/`vsPlayer` block names and combined `!split.team` rows on multi-club seasons (`L-2`).
