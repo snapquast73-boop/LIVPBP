@@ -1,0 +1,32 @@
+:root { color-scheme: dark; font: 100%/1.5 system-ui, sans-serif; background: #101722; color: #edf3fb; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; }
+a { color: #a5d0ff; }
+a:hover { color: white; }
+.topbar { display: flex; flex-wrap: wrap; align-items: center; gap: .8rem; padding: .8rem max(1rem, calc((100vw - 76rem)/2)); background: #172337; border-bottom: 1px solid #334255; }
+.brand { display: flex; flex-wrap: wrap; align-items: baseline; gap: .55rem; font-weight: 750; }
+.brand-sub, .site-footer, .status-line { color: #b4c1d0; }
+.date-nav, .tabs, .game-tabs { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+.btn, .tab-btn, input { border: 1px solid #526780; border-radius: .4rem; padding: .4rem .65rem; background: #24364e; color: #edf3fb; font: inherit; text-decoration: none; }
+button { cursor: pointer; }
+.btn:hover, .tab-btn:hover, [aria-pressed=true] { background: #355780; }
+.btn-feed { background: #7c2436; }
+main, .tabs, .site-footer, .status-line, .banner { max-width: 76rem; margin-inline: auto; padding: .6rem 1rem; }
+.banner:empty, .active-strip-wrap:empty, .live-review-banner-wrap:empty { display: none; }
+.game-list, .feed-list { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,31rem),1fr)); gap: .8rem; }
+.panel { min-width: 0; background: #192536; border: 1px solid #334255; border-radius: .6rem; padding: 1rem; margin-bottom: .8rem; }
+.panel h2 { margin-top: 0; font-size: 1.1rem; }
+.header-side, .header-center, .header-meta { text-align: center; }
+.header-side h2, .header-center h2 { margin: .35rem; }
+.table-scroll { overflow-x: auto; margin-block: .5rem; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: .4rem .6rem; text-align: left; border-bottom: 1px solid #334255; }
+th { background: #23324a; }
+.unverified { box-shadow: inset 0 -1px #e3b96a; }
+details { padding: .5rem 0; border-bottom: 1px solid #334255; }
+summary { cursor: pointer; }
+.loading-overlay { position: fixed; inset: 0; display: grid; place-items: center; background: #101722dd; z-index: 1; }
+.spinner { width: 2rem; height: 2rem; border: .25rem solid #526780; border-top-color: white; border-radius: 50%; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(1turn); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
