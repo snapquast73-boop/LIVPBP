@@ -143,7 +143,10 @@ mlb.com uses, re-implemented from scratch in vanilla HTML/CSS/JS.
 - No build step, no frameworks, no API keys — it runs on **GitHub Pages** (or any static
   host, or even `file://`).
 
-> **Live demo:** [buffedlizard55-lab.github.io/MLB-Live-PBP](https://buffedlizard55-lab.github.io/MLB-Live-PBP/)
+> **Live demo:** [snapquast73-boop.github.io/LIVPBP](https://snapquast73-boop.github.io/LIVPBP/)
+> (Restored 2026-11-20: the original author's repo linked here previously is
+> no longer on GitHub — see `flagged.html` items F-002/F-008 and
+> `COORDINATION.md` for the restoration log and flagged irregularities.)
 
 ---
 
