@@ -503,6 +503,9 @@ node tools/restoration-check.mjs -> ALL CHECKS PASSED
 ## Integration record
 
 - PR: _filled in below on completion._
+
+---
+
 # Session `arena/aa6c1d7b-livpbp` — functional-parity pass vs the cited working sites (2026-11-22)
 
 - **Session ID:** `aa6c1d7b` (Arena fixes this session to branch `arena/aa6c1d7b-livpbp`, branched from `main` @ `59a7351` (merge of PR #22). Arena forbids creating/pushing other branches, so the brief's `session-<id>/<task>` rule cannot be followed literally; same deviation as the previous sessions' F-001.)
