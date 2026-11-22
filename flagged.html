@@ -779,6 +779,120 @@ node server.mjs                  # optional persistence backend (feed log + SSE)
       status in sections 3–9 above; nothing in this pass contradicts them, and U-3/U-5 remain fixed.
     </p>
 
+    <h2>13. Reference-parity functional pass (session <code>6e2a58d9</code>, 2026-11-22)</h2>
+    <p>
+      Compared the site line by line with the two supplied reference sites
+      (<a href="https://snapquast73-boop.github.io/LIVPBP2/reviews.html" target="_blank" rel="noopener">LIVPBP2</a> ·
+      <a href="https://snapquast73-boop.github.io/POSTSSNALRT/reviews.html" target="_blank" rel="noopener">POSTSSNALRT</a>)
+      and with the surviving original contract — the uploaded
+      <a href="https://github.com/snapquast73-boop/LIVPBP/blob/aef1a74c814f4df9a2c57e766999ab7b1274a3c0/README.md" target="_blank" rel="noopener">README.md</a> and
+      <a href="https://github.com/snapquast73-boop/LIVPBP/blob/aef1a74c814f4df9a2c57e766999ab7b1274a3c0/reviews.html" target="_blank" rel="noopener">reviews.html</a>
+      at the upload commit <code>aef1a74c</code>. Where the references disagree, the original text
+      decides; nothing is inferred. Full record:
+      <a href="audit/reference-parity-2026-11-22.md">audit/reference-parity-2026-11-22.md</a>.
+    </p>
+    <table class="verify">
+      <thead>
+        <tr><th>#</th><th>Item</th><th>What the sources say</th><th>What the site does</th><th>Source</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>R2-1</td>
+          <td class="wrap"><code>reviews.html?date=YYYY-MM-DD</code> deep links were ignored (the feed opened “today”).</td>
+          <td class="wrap">LIVPBP2 honors the parameter and keeps the URL in step when navigating.</td>
+          <td class="wrap">Fixed on <code>main</code> by the parallel session <code>d105b565</code> (PR #23, URL sync) and re-tested by <code>aa6c1d7b</code> (PR #24) while this session was claiming it; verified instead of duplicated.</td>
+          <td class="wrap"><a href="https://github.com/snapquast73-boop/LIVPBP2/blob/cbcdddece88023ca512a18b7a1165b77d2caa7a7/assets/js/reviews-feed.js#L66-L67" target="_blank" rel="noopener">LIVPBP2 init/syncDateUI</a> · <a href="https://snapquast73-boop.github.io/LIVPBP/reviews.html?date=2026-08-28" target="_blank" rel="noopener">live deep link</a></td>
+          <td class="status-ok">Fixed (by PR #23)</td>
+        </tr>
+        <tr>
+          <td>R2-2</td>
+          <td class="wrap">The feed list had no empty-state notice (a blank list when nothing matched).</td>
+          <td class="wrap">Both reference sites render a notice on an empty date/filter.</td>
+          <td class="wrap">Added: “No tracked events for this date and filter yet…”. The <strong>original wording is lost</strong> — the sentence is ours.</td>
+          <td class="wrap"><a href="https://snapquast73-boop.github.io/LIVPBP2/reviews.html?date=2026-11-21" target="_blank" rel="noopener">LIVPBP2 empty state</a> · <a href="https://snapquast73-boop.github.io/POSTSSNALRT/reviews.html" target="_blank" rel="noopener">POSTSSNALRT empty state</a></td>
+          <td class="status-unverified">Wording unverified</td>
+        </tr>
+        <tr>
+          <td>R2-3</td>
+          <td class="wrap">Alert sound behavior differed between the references (RR-05 from the earlier audit).</td>
+          <td class="wrap">The uploaded sound-button title names “a gentle raindrop chime for new challenges/reviews/boundary calls, official-scorer pending rulings and official scoring changes (not ABS), and the same chime whenever an active review could remove a run already on the scoreboard”. POSTSSNALRT plays a cash-register <em>cha-ching</em> for every tracked event including routine ABS, with a Sound Lab — none of that appears in the uploaded contract. LIVPBP2 matches the raindrop cue.</td>
+          <td class="wrap">Raindrop chime kept and completed: pending rulings and scoring changes now chime too (they did not), and the runs-at-risk chime fires once per review the moment the condition first becomes visible. POSTSSNALRT's cha-ching/ABS alerts are <strong>documented, not copied</strong>. RR-05 is resolved in favor of the uploaded text.</td>
+          <td class="wrap"><a href="https://github.com/snapquast73-boop/LIVPBP/blob/aef1a74c814f4df9a2c57e766999ab7b1274a3c0/reviews.html" target="_blank" rel="noopener">uploaded reviews.html L39</a> · <a href="https://github.com/snapquast73-boop/POSTSSNALRT/blob/3c110fca0c580277da3ed387b2c5ae11cf4b3da5/reviews.html#L38-L42" target="_blank" rel="noopener">POSTSSNALRT button title</a></td>
+          <td class="status-flag">Resolved per original text</td>
+        </tr>
+        <tr>
+          <td>R2-4</td>
+          <td class="wrap">The challenges-remaining tracker lacked the README's team prefix and both-teams summary; ABS counter lines never rendered at all (the playByPlay payload carries no counter nodes).</td>
+          <td class="wrap">README example rows are exactly <code>CIN: 2 ABS challenges left now (2 successful · 0 failed)</code>, <code>PIT: 1 manager challenge left now (0 used)</code>, summary <code>Challenges left: CIN 1 MGR · 2 ABS — CHC 1 MGR · 2 ABS</code> “on hover and on the Under-Review live strip”. Official manager counters live on <code>schedule?hydrate=review</code>; ABS counters only on <code>feed/live gameData.absChallenges</code>.</td>
+          <td class="wrap">Fixed: prefixed counter lines, hover summary, strip summary, and ABS counters via the verified lean <code>feed/live</code> projection. Asserted byte-exact against the README examples in <code>tools/smoke-test.mjs</code> §[12].</td>
+          <td class="wrap"><a href="https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=2026-08-28&hydrate=review&fields=dates,games,gamePk,review,hasChallenges,away,home,used,remaining" target="_blank" rel="noopener">schedule counters</a> · <a href="https://statsapi.mlb.com/api/v1.1/game/824960/feed/live?fields=gameData,absChallenges,hasChallenges,away,home,usedSuccessful,usedFailed,remaining,review,used" target="_blank" rel="noopener">ABS counters</a></td>
+          <td class="status-ok">Fixed</td>
+        </tr>
+        <tr>
+          <td>R2-5</td>
+          <td class="wrap">LIVPBP2 also prints the both-teams summary as a permanent visible line on every row.</td>
+          <td class="wrap">The README says the summary appears “on hover and on the Under-Review live strip”.</td>
+          <td class="wrap">Hover + strip implemented per the README; the always-visible row line is <strong>not</strong> copied (kept as a documented reference discrepancy).</td>
+          <td class="wrap"><a href="https://github.com/snapquast73-boop/LIVPBP2/blob/cbcdddece88023ca512a18b7a1165b77d2caa7a7/assets/js/reviews.js#L156-L170" target="_blank" rel="noopener">LIVPBP2 countersSummary</a></td>
+          <td class="status-flag">Flagged — reference discrepancy</td>
+        </tr>
+        <tr>
+          <td>R2-6</td>
+          <td class="wrap">Boundary-call classification was over-broad: charged manager challenges of boundary-type plays (<code>MH</code>/<code>MD</code>/<code>MO</code>/<code>MT</code>/<code>MS</code>) were chipped “Boundary call”, and catch/trap umpire reviews were included.</td>
+          <td class="wrap">The official registry labels those codes “Manager challenge: …” (charged) — only <code>N*</code> codes are “Umpire review: …”. The README defines boundary-call reviews as “potential home runs / fair-foul at the wall” and “<code>NH</code> = boundary-call review”, and says boundary reviews are not charged to a team's counter. LIVPBP2 applies exactly this rule; POSTSSNALRT applies a third rule (boundary = <code>MS</code>/<code>NS</code> only).</td>
+          <td class="wrap">Fixed: boundary calls are umpire-side home run / fair-foul / stadium-boundary reviews only; manager challenges stay Challenges rows (with their counter line). Catch/drop and trap umpire reviews render as Reviews. The three-way reference disagreement is recorded here — the original text governs.</td>
+          <td class="wrap"><a href="https://statsapi.mlb.com/api/v1/gameStatus" target="_blank" rel="noopener">gameStatus registry</a> · <a href="https://github.com/snapquast73-boop/LIVPBP/blob/aef1a74c814f4df9a2c57e766999ab7b1274a3c0/README.md" target="_blank" rel="noopener">uploaded README</a></td>
+          <td class="status-ok">Fixed</td>
+        </tr>
+        <tr>
+          <td>R2-7</td>
+          <td class="wrap">“score impact pending” (boundary review, no credited run) was missing; Before/Possible were silently omitted when the page opened after a ruling.</td>
+          <td class="wrap">README: a boundary review with no currently credited run “says ‘score impact pending’ and does not invent an alternate score”; when the page opens only after resolution, Before/Possible are “honestly marked … as not observed”.</td>
+          <td class="wrap">Both render now (“score impact pending”; “– (not observed)”). The dash wording is ours — the original marking wording is lost.</td>
+          <td class="wrap"><a href="https://github.com/snapquast73-boop/LIVPBP/blob/aef1a74c814f4df9a2c57e766999ab7b1274a3c0/README.md" target="_blank" rel="noopener">uploaded README</a> · <a href="https://github.com/snapquast73-boop/LIVPBP2/blob/cbcdddece88023ca512a18b7a1165b77d2caa7a7/assets/js/reviews-feed.js#L522-L525" target="_blank" rel="noopener">LIVPBP2 tracker</a></td>
+          <td class="status-unverified">Wording unverified (marking contractual)</td>
+        </tr>
+        <tr>
+          <td>R2-8</td>
+          <td class="wrap">Irregularity notes were misattributed: the game's first note was repeated on every row of that game (seen live on the 2026-08-28 slate).</td>
+          <td class="wrap">The page contract says plays that vanish or edit are “flagged as irregularities for review, never corrected or hidden”.</td>
+          <td class="wrap">Fixed: entry-scoped notes render only on their row; game-level notes render once as flagged rows. LIVPBP2 instead has a “Flagged” tab the original filter list does not mention — the original presentation is unrecoverable.</td>
+          <td class="wrap"><a href="https://snapquast73-boop.github.io/LIVPBP/reviews.html?date=2026-08-28" target="_blank" rel="noopener">live feed</a> · <a href="https://github.com/snapquast73-boop/LIVPBP2/blob/cbcdddece88023ca512a18b7a1165b77d2caa7a7/assets/js/reviews-feed.js#L492-L500" target="_blank" rel="noopener">LIVPBP2 flagged tab</a></td>
+          <td class="status-ok">Fixed (presentation unverified)</td>
+        </tr>
+        <tr>
+          <td>R2-9</td>
+          <td class="wrap">The counter-regression detector (“a used-counter that moves backwards … is flagged … instead of being silently corrected”) was called with the wrong object shape and never compared anything.</td>
+          <td class="wrap">README: official counters are read as-is; a backwards move is flagged on the row, never corrected.</td>
+          <td class="wrap">Fixed: per-kind (manager/ABS) regression comparisons that actually run; findings surface as R2-8's flagged rows.</td>
+          <td class="wrap"><a href="https://github.com/snapquast73-boop/LIVPBP/blob/arena/6e2a58d9-livpbp/assets/js/reviews.js" target="_blank" rel="noopener">reviews.js counterRegression</a></td>
+          <td class="status-ok">Fixed</td>
+        </tr>
+        <tr>
+          <td>R2-10</td>
+          <td class="wrap">Summary-tile labels and counts differ across all three sites.</td>
+          <td class="wrap">The original pages never pinned tile labels; the README names only the “ABS Challenges” and “Runs at Risk” stats.</td>
+          <td class="wrap">Existing tile set kept unchanged (Reviews, Challenges, Umpire reviews, ABS challenges, Boundary calls, Under review, Runs at risk, Scoring changes). Exact original labels are unrecoverable.</td>
+          <td class="wrap"><a href="https://snapquast73-boop.github.io/LIVPBP2/reviews.html?date=2026-08-28" target="_blank" rel="noopener">LIVPBP2 tiles</a> · <a href="https://snapquast73-boop.github.io/POSTSSNALRT/reviews.html" target="_blank" rel="noopener">POSTSSNALRT tiles</a></td>
+          <td class="status-unverified">Unverified</td>
+        </tr>
+        <tr>
+          <td>R2-11</td>
+          <td class="wrap">ABS rows are excluded from the All tab.</td>
+          <td class="wrap">Uploaded README: “<strong>All</strong> (every category except ABS pitch challenges…)”. LIVPBP2 agrees; POSTSSNALRT deliberately includes ABS (documented there as an intentional deviation).</td>
+          <td class="wrap">Kept as-is (ABS has its own tab, tile and counters). POSTSSNALRT's inclusion is its own documented deviation from the uploaded README.</td>
+          <td class="wrap"><a href="https://github.com/snapquast73-boop/LIVPBP/blob/aef1a74c814f4df9a2c57e766999ab7b1274a3c0/README.md" target="_blank" rel="noopener">uploaded README</a> · <a href="https://github.com/snapquast73-boop/POSTSSNALRT/blob/3c110fca0c580277da3ed387b2c5ae11cf4b3da5/docs/abs-inclusion.md" target="_blank" rel="noopener">POSTSSNALRT abs-inclusion.md</a></td>
+          <td class="status-flag">Flagged — reference discrepancy</td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="color:var(--muted);font-size:13px">
+      Checks: <code>npm test</code> → 59 passed (12 new checks, §[12]) ·
+      <code>node tests/run-all.mjs</code> → syntax OK · 40 local refs OK · 8 bindings OK · 47/47 jsdom ·
+      <code>node tools/restoration-check.mjs</code> → ALL CHECKS PASSED. Earlier items
+      (U-1…U-11, I-8, F-001…F-009, L-1…L-4, RR-01…RR-06, D-1…D-4) keep their status above;
+      RR-05 is answered by R2-3.
+    </p>
 
   </main>
 
