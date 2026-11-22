@@ -450,6 +450,13 @@ Merge-conflict note (2026-11-20): rebasing onto `main` @ `9297edc` (PR #12, sess
 
 | Task | Status | Owner | File scope | Official source |
 |---|---|---|---|---|
-| Audit current functionality, tests and Pages deployment; identify any further work | in progress | `1587d8dd` | `COORDINATION.md` | https://docs.github.com/en/pages/getting-started-with-github-pages/about-github-pages |
+| Audit current functionality, tests and Pages deployment; identify any further work | done | `1587d8dd` | `COORDINATION.md` | https://docs.github.com/en/pages/getting-started-with-github-pages/about-github-pages |
 
 Arena requires the existing `arena/1587d8dd-livpbp` branch; no separate session branch will be created. Previously logged in-progress integration claims are historical and have completion records above.
+
+### Follow-up results (2026-11-22)
+
+- GitHub reports [Pages built from main at `59a7351`](https://api.github.com/repos/snapquast73-boop/LIVPBP/pages/builds/latest); the [deployed replay page](https://snapquast73-boop.github.io/LIVPBP/reviews.html) rendered an empty slate at the time of inspection. The two supplied comparison pages also rendered empty slates. Empty-slate rendering is not a test of an actual live review.
+- `npm test`: 44 passed. `node tools/restoration-check.mjs`: all checks passed. `node tests/run-all.mjs`: syntax, 40 local references, 8 bindings and 37 fixture-render checks passed. The link check is local only; it does not establish that every external link works.
+- Sampled the official [MLB game-status registry](https://statsapi.mlb.com/api/v1/gameStatus) and [game 823109 play-by-play](https://statsapi.mlb.com/api/v1/game/823109/playByPlay). This follow-up is not a fresh line-by-line re-verification of every data field or a live-game end-to-end test. Prior detailed checks and unresolved items are documented on the [Flagged for Review page](https://snapquast73-boop.github.io/LIVPBP/flagged.html) and in `docs/verification-report.md`. The original missing assets and historical feed records cannot be recovered merely from the present deployment; exact parity remains unverified.
+- No new functional defect was established by this limited pass, so existing app files were not changed. Existing flags and estimated model outputs remain subject to review; the fixture tests do not prove all live values are correct.
