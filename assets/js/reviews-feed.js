@@ -80,26 +80,31 @@
     if (picker && picker.value !== state.date) picker.value = state.date;
     var label = $('date-label');
     if (label) label.textContent = MLB.formatDateLabel(state.date);
+    syncUrl();
+  }
+
+  /* Keep the address bar in step with the selected date (shareable links).
+   * Guarded: history.replaceState is not writable in every embedding context. */
+  function syncUrl() {
+    try {
+      var url = new URL(global.location.href);
+      if (url.searchParams.get('date') === state.date) return;
+      url.searchParams.set('date', state.date);
+      global.history.replaceState(null, '', url.toString());
+    } catch (e) { /* ignore */ }
   }
 
   function parseDate() {
+    /* A ?date=YYYY-MM-DD deep link (reviews.html?date=2026-10-28) wins over the
+     * picker, so a shared or bookmarked URL always opens the date it names. */
+    var fromUrl = null;
+    try {
+      fromUrl = new URLSearchParams(global.location.search || '').get('date');
+    } catch (e) { fromUrl = null; }
+    if (MLB.isValidISODate(fromUrl)) return fromUrl;
     var input = $('date-picker');
     var value = input && input.value;
     return MLB.isValidISODate(value) ? value : MLB.todayISO();
-  }
-
-  /* `?date=YYYY-MM-DD` opens the feed for a specific day (deep links such as
-   * reviews.html?date=2026-08-28); anything invalid falls back to today.
-   * Read only at init — the date-picker and the day-nav buttons stay the
-   * in-page controls, exactly as before. */
-  function urlDate() {
-    try {
-      var params = new URLSearchParams((global.location && global.location.search) || '');
-      var fromUrl = params.get('date');
-      return MLB.isValidISODate(fromUrl) ? fromUrl : null;
-    } catch (err) {
-      return null;
-    }
   }
 
   /* ------------------------------------------------------------ log helpers */
@@ -840,7 +845,7 @@
   }
 
   function init() {
-    state.date = urlDate() || parseDate();
+    state.date = parseDate();
     syncNav();
     state.soundOn = loadPref('sound', false);
     state.notifyOn = loadPref('notify', false);
@@ -900,7 +905,13 @@
     prevDay: function () { setDate(MLB.shiftISODate(state.date, -1)); },
     nextDay: function () { setDate(MLB.shiftISODate(state.date, 1)); },
     today: function () { setDate(MLB.todayISO()); },
-    pickDate: function () { setDate(parseDate()); },
+    pickDate: function () {
+      /* The picker is the user's own choice; a ?date= deep link seeds the first
+       * view but must not override a later pick. */
+      var input = $('date-picker');
+      var value = input && input.value;
+      setDate(MLB.isValidISODate(value) ? value : state.date);
+    },
     setFilter: setFilter,
     toggleSound: toggleSound,
     toggleNotify: toggleNotify,

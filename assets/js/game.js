@@ -377,11 +377,18 @@
   }
 
   /* Per-row official source link (restores the parallel session's F-009 request:
-   * every linescore / box-score row says where its numbers came from). */
+   * every linescore / box-score row says where its numbers came from).
+   *
+   * The rows are rendered from ONE feed/live response — liveData.linescore and
+   * liveData.boxscore — so the link points at that exact request.  The separate
+   * /linescore and /boxscore endpoints can publish a different value for the
+   * same game (game 775296 reports 2 vs 3 errors for the home side; see
+   * flagged.html item D-2), and a source link must not open a number the page
+   * is not showing. */
   function sourceCell(kind) {
-    var url = 'https://statsapi.mlb.com/api/v1/game/' + state.gamePk + '/' + kind;
+    var url = 'https://statsapi.mlb.com/api/v1.1/game/' + state.gamePk + '/feed/live';
     return '<td class="src-cell"><a href="' + url + '" target="_blank" rel="noopener"' +
-      ' title="Official StatsAPI source for this row">source</a></td>';
+      ' title="Official StatsAPI source for this row: feed/live &quot;liveData.' + kind + '&quot;">source</a></td>';
   }
 
   /* Absent values are shown as a dash and never substituted or guessed. */
