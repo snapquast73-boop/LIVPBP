@@ -445,3 +445,27 @@ Merge-conflict note (2026-11-20): rebasing onto `main` @ `9297edc` (PR #12, sess
 | `S1f-2` | Live-StatsAPI field fixes (`expectedStatistics.avg` xBA, `vsPlayerTotal` H2H, combined `!split.team` splits, `remainingPAs`, `boxscore.seasonStats`, `MF` fallback, `events[last].index`, PA-ending `MJ` counts) | `done` | `arena/1f908513-livpbp` | `assets/js/props.js`, `assets/js/game.js`, `assets/js/reviews.js` |
 | `S1f-3` | Replay-audit handoff (`RR-01` `dateSeq` guard, `RR-02` official `pitchNumber`, `RR-03` scoring changes in `All`, `RR-04` direct MLB API row links, `RR-06` smoke-test script readiness) | `done` | `arena/1f908513-livpbp` | `assets/js/reviews-feed.js`, `assets/js/reviews.js`, `assets/js/game.js`, `tools/smoke-test.mjs` |
 | `S1f-4` | Per-row official `https://` source links, blank unconfirmed value cells, and `L-1..L-4` + `RR-01..RR-06` tables on `flagged.html` & `docs/*.md` (`RR-05` flagged `needs review`) | `needs review` | `arena/1f908513-livpbp` | `flagged.html`, `docs/verification-report.md`, `docs/statsapi-field-map.md`, `COORDINATION.md` |
+
+---
+
+# Session `arena/aa6c1d7b-livpbp` — functional-parity pass vs the cited working sites (2026-11-22)
+
+- **Session ID:** `aa6c1d7b` (Arena fixes this session to branch `arena/aa6c1d7b-livpbp`, branched from `main` @ `59a7351` (merge of PR #22). Arena forbids creating/pushing other branches, so the brief's `session-<id>/<task>` rule cannot be followed literally; same deviation as the previous sessions' F-001.)
+- **User's reference sites (reported working):** the Replay Feed on
+  [LIVPBP2](https://snapquast73-boop.github.io/LIVPBP2/reviews.html) and
+  [POSTSSNALRT](https://snapquast73-boop.github.io/POSTSSNALRT/reviews.html). Both are sibling
+  uploads of the same lost upstream (`buffedlizard55-lab/MLB-Live-PBP`, 404) restored by other
+  sessions; this repo (LIVPBP) is a third, independent restoration already live at
+  <https://snapquast73-boop.github.io/LIVPBP/>.
+
+## Task board (`arena/aa6c1d7b-livpbp`)
+
+| Task ID | Description | Status | File scope |
+|---|---|---|---|
+| `AA6C-1` | Functional-parity fix: honor `?date=YYYY-MM-DD` on Scoreboard + Replay Feed (LIVPBP2 supports it; this repo ignored it and always opened today — offseason shows zero games). Regression coverage in the jsdom render test. | in progress | `assets/js/scoreboard.js`, `assets/js/reviews-feed.js`, `tests/jsdom-render-test.mjs`, `COORDINATION.md` |
+| `AA6C-2` | Verification pass: `npm test`, `node tests/run-all.mjs`, live fetches of the deployed pages incl. `?date=2026-08-28` (15 games; reviews feed with ABS rows) | pending | — |
+| `AA6C-3` | Integration: PR → merge to `main` → confirm GitHub Pages deploy → record here | pending | repo root (PR only) |
+
+## Log (`aa6c1d7b`)
+
+- 2026-11-22 — Audit vs the two cited sites. HTML shells are byte-near-identical (footer wording only). Functional gap found: `parseDate()` in this repo reads only the `date-picker` element; `window.location.search` is never consulted (`assets/js/scoreboard.js:42`, `assets/js/reviews-feed.js:85`). Verified on the live site: `LIVPBP/reviews.html?date=2026-08-28` and `LIVPBP/index.html?date=2026-08-28` render today (offseason, 0 games) instead of 2026-08-28, while `LIVPBP2/index.html?date=2026-08-28` renders all 15 Finals and `LIVPBP2/reviews.html?date=2026-08-28` renders 10 reviews & challenges / 79 ABS challenges for that date. POSTSSNALRT also ignores `?date=` (date-picker navigation only), so `?date=` support is taken from LIVPBP2, the cited site that has it. No other functional deltas found: `game.html?gamePk=` works here (verified live on gamePk 824638: header, linescore + per-row source links, ABS chips), `index.html` offseason slate notice + "Most recent date with games" jump button works (schedule-range endpoint confirmed: games listed through 2026-10-28), `flagged.html` renders.
