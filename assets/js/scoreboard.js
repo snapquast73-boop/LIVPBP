@@ -207,7 +207,7 @@
   function offerRecentDate() {
     if (state.lastGameDate !== undefined || state.lookingForRecent) return;
     state.lookingForRecent = true;
-    var from = MLB.shiftISODate(state.date, -45);
+    var from = MLB.shiftISODate(state.date, -180);
     MLB.scheduleRange(from, state.date)
       .then(function (payload) {
         var dates = ((payload && payload.dates) || []).filter(function (d) {

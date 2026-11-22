@@ -372,6 +372,7 @@
     });
 
     Props.getForecast({
+      gamePk: state.gamePk,
       batterId: matchup.batter.id,
       batterName: matchup.batter.fullName,
       batterHand: matchup.batSide && matchup.batSide.code,
@@ -794,10 +795,15 @@
     /* While a review is in flight, probe the lean play-by-play endpoint first
      * and pull the full feed only when the review state flips. */
     var pre = state.inReview
-      ? MLB.playByPlay(state.gamePk, { fields: 'allPlays,about,atBatIndex,hasReview' })
+      ? MLB.playByPlay(state.gamePk, { fields: 'allPlays,about,atBatIndex,hasReview,isComplete,reviewDetails,inProgress,playEvents' })
         .then(function (lean) {
           var plays = (lean && lean.allPlays) || [];
-          var stillReview = plays.some(function (p) { return p && p.about && p.about.hasReview === true && p.about.isComplete === false; });
+          var stillReview = plays.some(function (p) {
+            if (!p) return false;
+            if (p.reviewDetails && p.reviewDetails.inProgress === true) return true;
+            if (Array.isArray(p.playEvents) && p.playEvents.some(function (ev) { return !!(ev && ev.reviewDetails && ev.reviewDetails.inProgress === true); })) return true;
+            return !!(p.about && p.about.hasReview === true && p.about.isComplete === false);
+          });
           if (!stillReview) state.inReview = false;
           return stillReview ? null : MLB.gameFeed(state.gamePk);
         })

@@ -795,7 +795,7 @@
     state.lookingForRecent = true;
     var reqSeq = state.dateSeq;
     var reqDate = state.date;
-    var from = MLB.shiftISODate(reqDate, -45);
+    var from = MLB.shiftISODate(reqDate, -180);
     MLB.scheduleRange(from, reqDate)
       .then(function (payload) {
         if (reqSeq !== state.dateSeq || reqDate !== state.date) return;
