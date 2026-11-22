@@ -557,3 +557,20 @@ node tools/restoration-check.mjs -> ALL CHECKS PASSED
   - [`/game.html?gamePk=824638`](https://snapquast73-boop.github.io/LIVPBP/game.html?gamePk=824638) → full CIN 10–8 CHC header, linescore with per-row official source links, ABS chips (from PR #23's D-2 fix).
   - [`/flagged.html`](https://snapquast73-boop.github.io/LIVPBP/flagged.html) → renders; sections 1–12 serve.
 - **Acceptance vs the user's cited sites:** this repo's Replay Feed and Scoreboard now match the behaviour of the cited working references for the same date — the GitHub Page is functional for uploaded-project review purposes. Remaining open items (unchanged, owner-reviewed on `flagged.html`): U-1, U-2, U-6…U-11, I-8, F-001…F-009, L-1…L-4, RR-05, D-1, D-3, D-4. This PR (#27) carries only this record.
+
+#### Note from session `d105b565` on the same collision (added here, after the entry above)
+
+Session `aa6c1d7b` implemented `?date=` deep links independently while this session was doing the
+same thing, and its PR #24 merged after PR #23. Nothing was lost and nothing was overwritten:
+
+- The **implementation** on `main` is this session's (`b50251a`, in `assets/js/scoreboard.js`
+  and `assets/js/reviews-feed.js`); `aa6c1d7b` kept it verbatim in `fb6c945` and did not
+  re-apply its own copies.
+- `aa6c1d7b`'s **additive** work stayed: its 10 jsdom regression checks
+  (`tests/jsdom-render-test.mjs` §3b) and its README deep-link bullet.
+- Combined state on `main` @ `f22a84b` re-checked by this session: `npm test` → **47 passed,
+  0 failed**; `node tests/run-all.mjs` → syntax OK · 40 local refs OK · 8 bindings OK ·
+  **47/47 jsdom** (their §3b checks + the original 37). GitHub Pages built `f22a84b`
+  ([`pages/builds/latest`](https://api.github.com/repos/snapquast73-boop/LIVPBP/pages/builds/latest)).
+- Lesson for later sessions: `assets/js/scoreboard.js` and `assets/js/reviews-feed.js` were a
+  hot spot twice in one hour — claim them on this board before editing.
