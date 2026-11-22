@@ -23,10 +23,12 @@
 
   var state = {
     date: MLB.todayISO(),
+    dateSeq: 0,
     filter: 'all',
     games: [],
     scheduled: [],
     reviewByPk: Object.create(null),
+    scoringChanges: Object.create(null),
     log: null,
     loading: false,
     lastError: null,
@@ -39,25 +41,22 @@
 
   function $(id) { return document.getElementById(id); }
 
+  function urlDate() {
+    try {
+      var params = new URLSearchParams(global.location.search || '');
+      var d = params.get('date');
+      return MLB.isValidISODate(d) ? d : null;
+    } catch (e) { return null; }
+  }
+
   function parseDate() {
     /* A ?date=YYYY-MM-DD deep link (index.html?date=2026-10-28) wins over the
      * picker, so a shared or bookmarked URL always opens the date it names. */
-    var fromUrl = null;
-    try {
-      fromUrl = new URLSearchParams(global.location.search || '').get('date');
-    } catch (e) { fromUrl = null; }
-    if (MLB.isValidISODate(fromUrl)) return fromUrl;
+    var fromUrl = urlDate();
+    if (fromUrl) return fromUrl;
     var input = $('date-picker');
     var value = input && input.value;
     return MLB.isValidISODate(value) ? value : MLB.todayISO();
-  }
-
-  function syncNav() {
-    var picker = $('date-picker');
-    if (picker && picker.value !== state.date) picker.value = state.date;
-    var label = $('date-label');
-    if (label) label.textContent = MLB.formatDateLabel(state.date);
-    syncUrl();
   }
 
   /* Keep the address bar in step with the selected date (shareable links).
@@ -69,6 +68,20 @@
       url.searchParams.set('date', state.date);
       global.history.replaceState(null, '', url.toString());
     } catch (e) { /* ignore */ }
+  }
+
+  function reviewsHref() {
+    return 'reviews.html?date=' + encodeURIComponent(state.date);
+  }
+
+  function syncNav() {
+    var picker = $('date-picker');
+    if (picker && picker.value !== state.date) picker.value = state.date;
+    var label = $('date-label');
+    if (label) label.textContent = MLB.formatDateLabel(state.date);
+    var feedLink = document.querySelector('a.btn-feed[href^="reviews.html"]');
+    if (feedLink) feedLink.setAttribute('href', reviewsHref());
+    syncUrl();
   }
 
   function statusLine(text, isError) {
@@ -117,17 +130,28 @@
   function fetchSchedule() {
     if (state.pollInFlight) return Promise.resolve();
     state.pollInFlight = true;
+    var reqSeq = state.dateSeq;
+    var reqDate = state.date;
     state.abort = new AbortController();
-    return MLB.schedule(state.date, { signal: state.abort.signal })
+    return MLB.schedule(reqDate, { signal: state.abort.signal })
       .then(function (payload) {
+        if (reqSeq !== state.dateSeq || reqDate !== state.date) return;
         state.games = flattenGames(payload);
         state.lastError = null;
         state.lastUpdated = Date.now();
         state.scheduled = state.games.map(function (g) { return g.gamePk; });
+        var nextRev = Object.create(null);
+        state.games.forEach(function (g) {
+          var rev = Reviews.statusReview(g.status);
+          if (rev) nextRev[g.gamePk] = Object.assign({}, rev, { signature: rev.code + '|' + rev.reason });
+        });
+        state.reviewByPk = nextRev;
         renderIfChanged();
         statusLine(summaryText());
       })
       .catch(function (err) {
+        if (reqSeq !== state.dateSeq || reqDate !== state.date) return;
+        if (err && err.name === 'AbortError') return;
         if (err && err.quiet) { statusLine('StatsAPI asked the page to slow down — pausing briefly.', false); return; }
         state.lastError = err;
         render();
@@ -278,7 +302,7 @@
     }
 
     return '' +
-      '<a class="' + classList.join(' ') + '" href="game.html?gamePk=' + encodeURIComponent(game.gamePk) + '">' +
+      '<a class="' + classList.join(' ') + '" href="game.html?gamePk=' + encodeURIComponent(game.gamePk) + '&date=' + encodeURIComponent(state.date) + '">' +
         '<div class="card-top">' +
           '<span class="card-status ' + meta.cls + '">' + UI.esc(statusText) + '</span>' +
           '<span>' + UI.esc(MLB.formatGameTime(game.gameDate)) + '</span>' +
@@ -363,7 +387,7 @@
       return '<div class="banner-item banner-review">' +
         '🚨 <strong>' + UI.esc(UI.abbr(away.team) + ' @ ' + UI.abbr(home.team)) + '</strong>' +
         ' — ' + UI.esc(review.typeLabel) + (review.reason ? ': ' + UI.esc(review.reason) : '') +
-        ' <a class="banner-link" href="reviews.html?date=' + encodeURIComponent(state.date) + '">Replay Feed →</a>' +
+        ' <a class="banner-link" href="' + UI.esc(reviewsHref()) + '">Replay Feed →</a>' +
         '</div>';
     }).join('');
   }
@@ -448,12 +472,22 @@
   function setDate(date) {
     var clean = MLB.isValidISODate(date) ? date : MLB.todayISO();
     if (clean === state.date) return;
+    state.dateSeq += 1;
     state.date = clean;
+    state.lastGameDate = undefined;
+    state.lookingForRecent = false;
     state.reviewByPk = Object.create(null);
+    state.scoringChanges = Object.create(null);
     state.games = [];
+    if (state.abort) {
+      try { state.abort.abort(); } catch (e) { /* ignore */ }
+    }
+    state.pollInFlight = false;
     syncNav();
     render();
     statusLine('Loading games for ' + MLB.formatDateLabel(state.date) + '…');
+    FeedLog.closeStream();
+    FeedLog.openStream(state.date);
     loadLog().then(fetchSchedule).then(function () { schedulePoll(0); });
   }
 
@@ -474,8 +508,15 @@
   }
 
   function init() {
-    state.date = parseDate();
+    state.date = urlDate() || parseDate();
     syncNav();
+    FeedLog.onChange(function (payload) {
+      if (!payload || payload.date !== state.date) return;
+      state.log = payload;
+      applyLogFlags();
+      renderIfChanged();
+    });
+    FeedLog.openStream(state.date);
 
     var nav = $('tabs');
     if (nav) {

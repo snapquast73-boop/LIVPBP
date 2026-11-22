@@ -102,14 +102,23 @@
   }
 
   function countDots(balls, strikes) {
+    var bKnown = typeof balls === 'number' && isFinite(balls);
+    var sKnown = typeof strikes === 'number' && isFinite(strikes);
+    if (!bKnown && !sKnown) {
+      return '<span class="count-block"><span class="count-label" title="Count not provided by official payload">—</span></span>';
+    }
     return '<span class="count-block">' +
-      '<span class="count-group"><span class="count-label">B</span>' + dots(Number(balls) || 0, 3, 'on-ball') + '</span>' +
-      '<span class="count-group"><span class="count-label">S</span>' + dots(Number(strikes) || 0, 2, 'on-strike') + '</span>' +
+      '<span class="count-group"><span class="count-label">B</span>' + (bKnown ? dots(balls, 3, 'on-ball') : '<span class="count-label">—</span>') + '</span>' +
+      '<span class="count-group"><span class="count-label">S</span>' + (sKnown ? dots(strikes, 2, 'on-strike') : '<span class="count-label">—</span>') + '</span>' +
       '</span>';
   }
 
   function outsDots(outs) {
-    return '<span class="count-group"><span class="count-label">OUT</span>' + dots(Number(outs) || 0, 3, 'on-out') + '</span>';
+    var oKnown = typeof outs === 'number' && isFinite(outs);
+    if (!oKnown) {
+      return '<span class="count-group"><span class="count-label">OUT</span><span class="count-label">—</span></span>';
+    }
+    return '<span class="count-group"><span class="count-label">OUT</span>' + dots(outs, 3, 'on-out') + '</span>';
   }
 
   /* occupied: { first: bool, second: bool, third: bool, scoring: bool } */

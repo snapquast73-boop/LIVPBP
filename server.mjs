@@ -102,8 +102,13 @@ function mergeFeedLogPayloads(existing, incoming, dateStr) {
   const orderList = [];
 
   function makeKey(entry) {
-    if (!entry || !entry.review) return null;
-    return `${entry.gamePk}:${entry.review.id || entry.review.atBatIndex || ''}`;
+    if (!entry) return null;
+    if (entry.id !== undefined && entry.id !== null && entry.id !== '') return String(entry.id);
+    if (!entry.review) return null;
+    const rid = entry.review.id !== undefined && entry.review.id !== null && entry.review.id !== ''
+      ? entry.review.id
+      : (entry.review.atBatIndex !== undefined && entry.review.atBatIndex !== null ? entry.review.atBatIndex : '');
+    return `${entry.gamePk}:${rid}`;
   }
 
   (Array.isArray(existing.entries) ? existing.entries : []).forEach((e) => {
@@ -121,10 +126,12 @@ function mergeFeedLogPayloads(existing, incoming, dateStr) {
       entryMap.set(k, e);
       if (!orderList.includes(k)) orderList.push(k);
     } else {
-      // Merge: prefer most complete / latest seen
+      // Merge: prefer most complete / latest seen; preserve top-level fields (id, kind, change, pending, scoreTracker)
       const mergedEntry = {
-        gamePk: e.gamePk || prev.gamePk,
-        review: { ...prev.review, ...e.review },
+        ...prev,
+        ...e,
+        gamePk: e.gamePk ?? prev.gamePk,
+        review: (prev.review || e.review) ? { ...(prev.review || {}), ...(e.review || {}) } : undefined,
         firstSeen: Math.min(prev.firstSeen || e.firstSeen || now, e.firstSeen || prev.firstSeen || now),
         lastSeen: Math.max(prev.lastSeen || 0, e.lastSeen || 0, now),
         matchupLabel: e.matchupLabel || prev.matchupLabel || null,
@@ -418,8 +425,16 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  fs.stat(filePath, (err, stats) => {
-    if (err || !stats.isFile()) {
+  // Reject dotfile / hidden directory segments (e.g. /.git/..., /.github/...)
+  // except /.nojekyll if requested directly.
+  const relSegments = path.relative(REPO_DIR, filePath).split(path.sep).filter(Boolean);
+  if (relSegments.some((seg) => seg.startsWith('.') && seg !== '.nojekyll')) {
+    sendError(res, 403, 'Forbidden');
+    return;
+  }
+
+  fs.lstat(filePath, (err, stats) => {
+    if (err || stats.isSymbolicLink() || !stats.isFile()) {
       // 404 fallback: if asking for an html page, check 404.html
       const notFoundPath = path.join(REPO_DIR, '404.html');
       if (fs.existsSync(notFoundPath)) {
