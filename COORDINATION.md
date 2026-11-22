@@ -584,8 +584,8 @@ node tools/restoration-check.mjs -> ALL CHECKS PASSED
 - `git pull --rebase origin main` conflicted in `COORDINATION.md` only: parallel sessions
   `d105b565` (PR #23, merged `1e405cc`) and `aa6c1d7b` (PR #24, merged `f22a84b`) appended board
   sections at the same spot while this session's claim was in flight (the claim conflicted twice,
-  against  and then against , and was consolidated into this single claim commit
-  on top of  @ ). Resolution keeps **every** incoming session section verbatim and
+  against `f22a84b` and then against `44975d4`, and was consolidated into this single claim commit
+  on top of `main` @ `44975d4`). Resolution keeps **every** incoming session section verbatim and
   appends this session's section after them. **Nothing of any other session was discarded or rewritten.** Both parallel
   sessions had already merged the `?date=` deep-link fix this session planned as G-1 (their
   implementations + the `d105b565` URL-sync variant are on `main`), so G-1 is marked superseded
