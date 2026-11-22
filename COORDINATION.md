@@ -645,6 +645,7 @@ same thing, and its PR #24 merged after PR #23. Nothing was lost and nothing was
   - `npm test` (`tools/smoke-test.mjs`): **52 passed, 0 failed** (+5 new `AF-1..AF-6` checks in §[12]).
   - `node tools/restoration-check.mjs`: **ALL CHECKS PASSED** (including `GET /.git/HEAD -> 403` and `atBatIndex: 0` merge preservation).
   - `node tests/run-all.mjs`: **syntax OK · 40 local references OK · 8 DOM bindings OK · 47/47 jsdom render checks OK**.
-  - Table-row provenance check: **92/92 Markdown data rows** (`README.md`, `docs/*.md`, `audit/*.md`) + **95/95 `flagged.html` data rows** carry clickable `https://` official source links, with blank cells on all unconfirmed items.
+  - `node tests/props-provenance-test.mjs`: **5 passed, 0 failed** (with `game.js` passing `gamePk` into `Props.getForecast`).
+  - Table-row provenance check: **102/102 Markdown data rows** (`README.md`, `docs/*.md`, `audit/*.md`, `tests/README.md`) + **95/95 `flagged.html` data rows** carry clickable `https://` official source links, with blank cells on all unconfirmed items.
 
 
