@@ -88,6 +88,20 @@
     return MLB.isValidISODate(value) ? value : MLB.todayISO();
   }
 
+  /* `?date=YYYY-MM-DD` opens the feed for a specific day (deep links such as
+   * reviews.html?date=2026-08-28); anything invalid falls back to today.
+   * Read only at init — the date-picker and the day-nav buttons stay the
+   * in-page controls, exactly as before. */
+  function urlDate() {
+    try {
+      var params = new URLSearchParams((global.location && global.location.search) || '');
+      var fromUrl = params.get('date');
+      return MLB.isValidISODate(fromUrl) ? fromUrl : null;
+    } catch (err) {
+      return null;
+    }
+  }
+
   /* ------------------------------------------------------------ log helpers */
 
   function upsertEntry(entry) {
@@ -826,7 +840,7 @@
   }
 
   function init() {
-    state.date = parseDate();
+    state.date = urlDate() || parseDate();
     syncNav();
     state.soundOn = loadPref('sound', false);
     state.notifyOn = loadPref('notify', false);

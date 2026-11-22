@@ -260,6 +260,37 @@ console.log(`jsdom-render-test: ${LIVE ? 'LIVE official API' : 'fixtures'} mode`
   close();
 }
 
+/* 3b. ?date= deep links — regression coverage (the param used to be ignored,
+ *     so a shared link always opened today, which is empty in the offseason) */
+{
+  const before = requested.length;
+  const { doc, errors, close } = await render('index.html', { query: '?date=2026-08-28', wait: 900 });
+  const label = textOf(doc.querySelector('#date-label'));
+  check('index?date=: label shows the requested date', /Aug 28, 2026/.test(label), label);
+  check('index?date=: picker holds the requested date', (doc.querySelector('#date-picker') || {}).value === '2026-08-28', String((doc.querySelector('#date-picker') || {}).value));
+  check('index?date=: schedule fetched with date=2026-08-28', requested.slice(before).some((u) => /[?&]date=2026-08-28(&|$)/.test(u)), requested.slice(before).join(' '));
+  check('index?date=: no uncaught errors', errors.length === 0, errors.join(' | '));
+  close();
+}
+{
+  const before = requested.length;
+  const { doc, errors, close } = await render('reviews.html', { query: '?date=2026-08-28', wait: 1600 });
+  const picker = (doc.querySelector('#date-picker') || {}).value;
+  const status = textOf(doc.querySelector('#status-line'));
+  check('reviews?date=: picker holds the requested date', picker === '2026-08-28', String(picker));
+  check('reviews?date=: schedule fetched with date=2026-08-28', requested.slice(before).some((u) => /[?&]date=2026-08-28(&|$)/.test(u)), requested.slice(before).join(' '));
+  check('reviews?date=: status line names the requested date', /Aug 28, 2026/.test(status), status);
+  check('reviews?date=: no uncaught errors', errors.length === 0, errors.join(' | '));
+  close();
+}
+{
+  const { doc, errors, close } = await render('reviews.html', { query: '?date=not-a-date', wait: 400 });
+  const picker = (doc.querySelector('#date-picker') || {}).value;
+  check('reviews?date=garbage: falls back to a valid ISO date', /^\d{4}-\d{2}-\d{2}$/.test(picker || ''), String(picker));
+  check('reviews?date=garbage: no uncaught errors', errors.length === 0, errors.join(' | '));
+  close();
+}
+
 /* 4. 404 */
 {
   const { doc, errors, close } = await render('404.html', { wait: 100 });

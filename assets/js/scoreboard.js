@@ -45,6 +45,20 @@
     return MLB.isValidISODate(value) ? value : MLB.todayISO();
   }
 
+  /* `?date=YYYY-MM-DD` opens the scoreboard for a specific day (deep links such
+   * as index.html?date=2026-08-28); anything invalid falls back to today.
+   * Read only at init — the date-picker and the day-nav buttons stay the
+   * in-page controls, exactly as before. */
+  function urlDate() {
+    try {
+      var params = new URLSearchParams((global.location && global.location.search) || '');
+      var fromUrl = params.get('date');
+      return MLB.isValidISODate(fromUrl) ? fromUrl : null;
+    } catch (err) {
+      return null;
+    }
+  }
+
   function syncNav() {
     var picker = $('date-picker');
     if (picker && picker.value !== state.date) picker.value = state.date;
@@ -449,7 +463,7 @@
   }
 
   function init() {
-    state.date = parseDate();
+    state.date = urlDate() || parseDate();
     syncNav();
 
     var nav = $('tabs');
