@@ -298,12 +298,26 @@
       var logitDelta = clamp(logit(seasonProb) - logit(LEAGUE_HIT_RATE), -MAX_SEASON_LOGITS, MAX_SEASON_LOGITS);
       seasonProb = expit(logit(LEAGUE_HIT_RATE) + logitDelta);
 
+      var batterStatsUrl = MLB.API_ROOT + '/v1/people/' + encodeURIComponent(ctx.batterId) +
+        '/stats?stats=season,statSplits,gameLog,expectedStatistics&group=hitting&season=' +
+        encodeURIComponent(season) + '&sitCodes=vl,vr';
+      var pitcherStatsUrl = MLB.API_ROOT + '/v1/people/' + encodeURIComponent(ctx.pitcherId) +
+        '/stats?stats=season,statSplits,gameLog,expectedStatistics&group=pitching&season=' +
+        encodeURIComponent(season) + '&sitCodes=vl,vr';
+      var h2hStatsUrl = MLB.API_ROOT + '/v1/people/' + encodeURIComponent(ctx.batterId) +
+        '/stats?stats=vsPlayer&group=hitting&opposingPlayerId=' + encodeURIComponent(ctx.pitcherId);
+      var gameFeedUrl = ctx.gamePk
+        ? MLB.API_ROOT + '/v1.1/game/' + encodeURIComponent(ctx.gamePk) + '/feed/live'
+        : batterStatsUrl;
+
       var drivers = [];
       drivers.push({
         key: 'season',
         label: 'Season',
         points: (seasonProb - LEAGUE_HIT_RATE) * 100,
         detail: describeSeason(batterSeason, batterExpected, pitcherSeason, pitcherExpected),
+        sourceUrl: batterStatsUrl,
+        altSourceUrl: pitcherStatsUrl,
       });
 
       var prob = seasonProb;
@@ -333,6 +347,8 @@
         drivers.push({
           key: 'platoon', label: 'Platoon', points: 0,
           detail: 'No usable vs-hand split in the payload — no platoon adjustment applied.',
+          sourceUrl: batterStatsUrl,
+          altSourceUrl: pitcherStatsUrl,
         });
       } else {
         prob = clamp(prob + platoonDelta, 0.02, 0.9);
@@ -341,6 +357,8 @@
           detail: 'Batter vs ' + (ctx.pitcherHand === 'L' ? 'LHP' : 'RHP') +
             ' and pitcher vs ' + (ctx.batterHand === 'L' ? 'LHB' : 'RHB') +
             ' splits, halved as a shrunken differential.',
+          sourceUrl: batterStatsUrl,
+          altSourceUrl: pitcherStatsUrl,
         });
       }
 
@@ -354,9 +372,14 @@
         drivers.push({
           key: 'form', label: 'Form', points: (prob - before) * 100,
           detail: 'Last ' + form.games + ' game(s) before this date: ' + form.hits + '-' + form.ab + ' (' + MLB.avg3(form.rate) + ').',
+          sourceUrl: batterStatsUrl,
         });
       } else {
-        drivers.push({ key: 'form', label: 'Form', points: 0, detail: 'No prior game log for this season — no form adjustment.' });
+        drivers.push({
+          key: 'form', label: 'Form', points: 0,
+          detail: 'No prior game log for this season — no form adjustment.',
+          sourceUrl: batterStatsUrl,
+        });
       }
 
       /* ---- career head-to-head */
@@ -368,9 +391,14 @@
         drivers.push({
           key: 'history', label: 'H2H', points: (prob - before) * 100,
           detail: 'Career vs this pitcher: ' + h2h.hits + '-' + h2h.ab + ' (regressed, capped at ±5.5 pts).',
+          sourceUrl: h2hStatsUrl,
         });
       } else {
-        drivers.push({ key: 'history', label: 'H2H', points: 0, detail: 'No career batter-vs-pitcher line published — no adjustment.' });
+        drivers.push({
+          key: 'history', label: 'H2H', points: 0,
+          detail: 'No career batter-vs-pitcher line published — no adjustment.',
+          sourceUrl: h2hStatsUrl,
+        });
       }
 
       /* ---- same-game familiarity */
@@ -381,9 +409,14 @@
         drivers.push({
           key: 'familiarity', label: 'Familiarity', points: (prob - before) * 100,
           detail: looks + ' previous look(s) at this pitcher in this game (+0.75 pt each, capped at the third).',
+          sourceUrl: gameFeedUrl,
         });
       } else {
-        drivers.push({ key: 'familiarity', label: 'Familiarity', points: 0, detail: 'First look at this pitcher in this game.' });
+        drivers.push({
+          key: 'familiarity', label: 'Familiarity', points: 0,
+          detail: 'First look at this pitcher in this game.',
+          sourceUrl: gameFeedUrl,
+        });
       }
 
       /* ---- live count */
@@ -399,10 +432,15 @@
         drivers.push({
           key: 'count', label: 'Count ' + balls + '-' + strikes, points: (prob - before) * 100,
           detail: 'Count factor ' + factor.toFixed(2) + ' applied in odds space (model constant, flagged U-2).',
+          sourceUrl: gameFeedUrl,
         });
       } else {
         prob = clamp(prob, CLAMP_NO_COUNT[0], CLAMP_NO_COUNT[1]);
-        drivers.push({ key: 'count', label: 'Count', points: 0, detail: 'No live count in the payload — pre-pitch estimate.' });
+        drivers.push({
+          key: 'count', label: 'Count', points: 0,
+          detail: 'No live count in the payload — pre-pitch estimate.',
+          sourceUrl: gameFeedUrl,
+        });
       }
 
       var tier = tierFor(prob);
@@ -427,12 +465,15 @@
         label: label.join('; '),
         batter: {
           id: ctx.batterId, name: ctx.batterName || '', hand: ctx.batterHand || '',
-          season: batterSeason, expected: batterExpected,
+          season: batterSeason, expected: batterExpected, sourceUrl: batterStatsUrl,
         },
         pitcher: {
           id: ctx.pitcherId, name: ctx.pitcherName || '', hand: ctx.pitcherHand || '',
-          season: pitcherSeason, expected: pitcherExpected,
+          season: pitcherSeason, expected: pitcherExpected, sourceUrl: pitcherStatsUrl,
         },
+        seasonYear: season,
+        gameDate: ctx.gameDate || '',
+        gameFinal: !!ctx.gameFinal,
         count: hasCount ? { balls: balls, strikes: strikes } : null,
         model: {
           leagueRate: LEAGUE_HIT_RATE,
@@ -457,19 +498,38 @@
 
   function baselineForecast(ctx, why) {
     var prob = LEAGUE_HIT_RATE;
+    var season = (ctx && ctx.season) || new Date().getUTCFullYear();
+    var fallbackSourceUrl = (ctx && ctx.batterId)
+      ? MLB.API_ROOT + '/v1/people/' + encodeURIComponent(ctx.batterId) + '/stats?stats=season&group=hitting&season=' + encodeURIComponent(season)
+      : (ctx && ctx.gamePk)
+        ? MLB.API_ROOT + '/v1.1/game/' + encodeURIComponent(ctx.gamePk) + '/feed/live'
+        : MLB.API_ROOT + '/v1/teams?sportId=1';
     return {
       ok: false,
       prob: prob,
       probPct: prob * 100,
       seasonProb: prob,
       tier: tierFor(prob),
-      drivers: [{ key: 'season', label: 'Baseline', points: 0, detail: why || 'League baseline.' }],
+      drivers: [{
+        key: 'season', label: 'Baseline', points: 0,
+        detail: why || 'League baseline.',
+        sourceUrl: fallbackSourceUrl,
+      }],
       atLeastOne: 0,
       remainingPAs: 0,
       notes: [why || 'League baseline.'],
       label: 'league baseline',
-      batter: { id: ctx && ctx.batterId, name: (ctx && ctx.batterName) || '', hand: (ctx && ctx.batterHand) || '' },
-      pitcher: { id: ctx && ctx.pitcherId, name: (ctx && ctx.pitcherName) || '', hand: (ctx && ctx.pitcherHand) || '' },
+      batter: {
+        id: ctx && ctx.batterId, name: (ctx && ctx.batterName) || '', hand: (ctx && ctx.batterHand) || '',
+        sourceUrl: (ctx && ctx.batterId) ? MLB.API_ROOT + '/v1/people/' + encodeURIComponent(ctx.batterId) + '/stats?stats=season&group=hitting&season=' + encodeURIComponent(season) : '',
+      },
+      pitcher: {
+        id: ctx && ctx.pitcherId, name: (ctx && ctx.pitcherName) || '', hand: (ctx && ctx.pitcherHand) || '',
+        sourceUrl: (ctx && ctx.pitcherId) ? MLB.API_ROOT + '/v1/people/' + encodeURIComponent(ctx.pitcherId) + '/stats?stats=season&group=pitching&season=' + encodeURIComponent(season) : '',
+      },
+      seasonYear: season,
+      gameDate: (ctx && ctx.gameDate) || '',
+      gameFinal: !!(ctx && ctx.gameFinal),
       count: null,
       model: { leagueRate: LEAGUE_HIT_RATE },
     };
@@ -512,22 +572,48 @@
     var batterExp = f.batter && f.batter.expected;
     var pitcherStat = f.pitcher && f.pitcher.season;
     var pitcherExp = f.pitcher && f.pitcher.expected;
+    var seasonYear = f.seasonYear || new Date().getUTCFullYear();
+
+    var batterSrc = (f.batter && f.batter.sourceUrl) ||
+      (f.batter && f.batter.id ? MLB.API_ROOT + '/v1/people/' + encodeURIComponent(f.batter.id) + '/stats?stats=season,statSplits,gameLog,expectedStatistics&group=hitting&season=' + encodeURIComponent(seasonYear) + '&sitCodes=vl,vr' : '');
+    var pitcherSrc = (f.pitcher && f.pitcher.sourceUrl) ||
+      (f.pitcher && f.pitcher.id ? MLB.API_ROOT + '/v1/people/' + encodeURIComponent(f.pitcher.id) + '/stats?stats=season,statSplits,gameLog,expectedStatistics&group=pitching&season=' + encodeURIComponent(seasonYear) + '&sitCodes=vl,vr' : '');
 
     var driverRows = f.drivers.map(function (d) {
       var sign = d.points > 0 ? '+' : '';
       return '<dt>' + UI.esc(d.label) + '</dt><dd>' + sign + d.points.toFixed(1) + ' pt</dd>';
     }).join('');
 
-    var detailRows = f.drivers.map(function (d) {
-      return '<div class="player-line">' + UI.esc(d.label) + ': ' + UI.esc(d.detail) + '</div>';
+    var detailTableRows = f.drivers.map(function (d) {
+      var sign = d.points > 0 ? '+' : '';
+      var srcUrl = d.sourceUrl || batterSrc || MLB.API_ROOT + '/v1/teams?sportId=1';
+      var links = '<a href="' + UI.esc(srcUrl) + '" target="_blank" rel="noopener" title="Official MLB StatsAPI source for this driver">source</a>';
+      if (d.altSourceUrl) {
+        links += ' · <a href="' + UI.esc(d.altSourceUrl) + '" target="_blank" rel="noopener" title="Official MLB StatsAPI pitcher source for this driver">pitcher</a>';
+      }
+      return '<tr>' +
+        '<td><b>' + UI.esc(d.label) + '</b></td>' +
+        '<td class="driver-pts">' + sign + d.points.toFixed(1) + ' pt</td>' +
+        '<td class="driver-detail">' + UI.esc(d.detail) + '</td>' +
+        '<td class="src-cell">' + links + '</td>' +
+      '</tr>';
     }).join('');
+
+    var isHistorical = Boolean(f.gameFinal || (f.gameDate && f.gameDate < MLB.todayISO()));
+    var provenanceNote = isHistorical
+      ? '<p class="box-note">Note on historical/completed games (flagged U-6): the <code>gameLog</code> form window filters strictly before <code>' +
+        UI.esc(f.gameDate || 'game date') + '</code>, while MLB\'s <code>season</code>, <code>expectedStatistics</code>, <code>statSplits</code>, and <code>vsPlayer</code> endpoints return full-' +
+        UI.esc(String(seasonYear)) + ' / career totals rather than pre-game point-in-time snapshots.</p>'
+      : '<p class="box-note">Every driver row links directly to the official <code>statsapi.mlb.com</code> endpoint its inputs were read from; model constants are flagged U-2 on <a href="flagged.html">Flagged for Review</a>.</p>';
 
     return '<div class="props-wrap">' +
       renderForecast(f) +
       '<div class="props-grid">' +
         '<div class="props-card"><h4>Batter</h4>' +
           '<div class="matchup-line">' + UI.esc(f.batter.name || '—') +
-            (f.batter.hand ? ' <span class="chip">' + UI.esc(f.batter.hand) + 'HB</span>' : '') + '</div>' +
+            (f.batter.hand ? ' <span class="chip">' + UI.esc(f.batter.hand) + 'HB</span>' : '') +
+            (batterSrc ? ' <a class="driver-src-inline" href="' + UI.esc(batterSrc) + '" target="_blank" rel="noopener" title="Official MLB StatsAPI batter stats">MLB API ↗</a>' : '') +
+          '</div>' +
           '<dl class="kv">' +
             '<dt>AVG</dt><dd>' + MLB.avg3(batterStat && batterStat.avg) + '</dd>' +
             '<dt>xBA</dt><dd>' + MLB.avg3(batterExp && batterExp.xba) + '</dd>' +
@@ -538,7 +624,9 @@
         '</div>' +
         '<div class="props-card"><h4>Pitcher</h4>' +
           '<div class="matchup-line">' + UI.esc(f.pitcher.name || '—') +
-            (f.pitcher.hand ? ' <span class="chip">' + UI.esc(f.pitcher.hand) + 'HP</span>' : '') + '</div>' +
+            (f.pitcher.hand ? ' <span class="chip">' + UI.esc(f.pitcher.hand) + 'HP</span>' : '') +
+            (pitcherSrc ? ' <a class="driver-src-inline" href="' + UI.esc(pitcherSrc) + '" target="_blank" rel="noopener" title="Official MLB StatsAPI pitcher stats">MLB API ↗</a>' : '') +
+          '</div>' +
           '<dl class="kv">' +
             '<dt>Opp AVG</dt><dd>' + MLB.avg3(pitcherStat && pitcherStat.avg) + '</dd>' +
             '<dt>xBA allowed</dt><dd>' + MLB.avg3(pitcherExp && pitcherExp.xba) + '</dd>' +
@@ -547,7 +635,13 @@
         '</div>' +
         '<div class="props-card"><h4>Model drivers</h4><dl class="kv">' + driverRows + '</dl></div>' +
       '</div>' +
-      '<div class="props-card"><h4>How each driver moved the number</h4>' + detailRows + '</div>' +
+      '<div class="props-card"><h4>How each driver moved the number</h4>' +
+        '<table class="driver-table">' +
+          '<thead><tr><th>Driver</th><th>Shift</th><th>Input &amp; adjustment</th><th title="Official source for this row">Src</th></tr></thead>' +
+          '<tbody>' + detailTableRows + '</tbody>' +
+        '</table>' +
+        provenanceNote +
+      '</div>' +
       (extra.matchupSummary ? '<div class="props-card"><h4>Matchup</h4>' + extra.matchupSummary + '</div>' : '') +
     '</div>';
   }

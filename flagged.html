@@ -779,7 +779,81 @@ node server.mjs                  # optional persistence backend (feed log + SSE)
       status in sections 3–9 above; nothing in this pass contradicts them, and U-3/U-5 remain fixed.
     </p>
 
-    <h2>13. Reference-parity functional pass (session <code>6e2a58d9</code>, 2026-11-22)</h2>
+    <h2>13. Line-by-line functional &amp; provenance parity pass (session <code>af75fbfd</code>, 2026-11-22)</h2>
+    <p style="color:var(--muted);font-size:13px">
+      Every row below comes from a complete line-by-line audit of all HTML pages, JS modules,
+      <code>server.mjs</code>, <code>README.md</code>, and the live reference sites
+      (<a href="https://snapquast73-boop.github.io/LIVPBP2/reviews.html?date=2026-08-28" target="_blank" rel="noopener">LIVPBP2</a>,
+      <a href="https://snapquast73-boop.github.io/POSTSSNALRT/reviews.html" target="_blank" rel="noopener">POSTSSNALRT</a>)
+      against live <code>statsapi.mlb.com</code> responses on 2026-11-22. Where no official source
+      publishes a value, the confirmed-value cell is left blank and never inferred.
+    </p>
+    <table class="verify">
+      <thead>
+        <tr><th>#</th><th>Item</th><th>Confirmed official value</th><th>Resolution / why it is flagged</th><th>Official source</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>AF-1</td>
+          <td class="wrap">Replay Feed official ABS challenge counters (<code>usedSuccessful</code>, <code>usedFailed</code>, <code>remaining</code>) and both-teams summary (<code>Challenges left: AWAY X MGR · Y ABS — HOME …</code>)</td>
+          <td class="wrap">Game 824638: <code>absChallenges.away = {usedSuccessful:3, usedFailed:0, remaining:2}</code>, <code>home = {usedSuccessful:5, usedFailed:0, remaining:2}</code></td>
+          <td class="wrap"><strong>Fixed:</strong> <code>playByPlay</code> omits <code>gameData.absChallenges</code>; <code>reviews-feed.js</code> now fetches leaf-projected <code>feed/live?fields=gameData,review,absChallenges,…</code> alongside <code>playByPlay</code> and renders both per-side official counter lines and hover/live-strip both-teams summaries via <code>Reviews.countersSummary</code>.</td>
+          <td class="wrap"><a href="https://statsapi.mlb.com/api/v1.1/game/824638/feed/live?fields=gameData,review,absChallenges,hasChallenges,away,home,used,remaining,usedSuccessful,usedFailed" target="_blank" rel="noopener">feed/live 824638 (absChallenges)</a></td>
+          <td class="status-ok">Fixed &amp; regression-tested</td>
+        </tr>
+        <tr>
+          <td>AF-2</td>
+          <td class="wrap">Counter-regression detector (<code>Reviews.counterRegression</code>) ignored nested <code>{manager, abs}</code> snapshots</td>
+          <td class="wrap"><code>away/home.{used,remaining,usedSuccessful,usedFailed}</code></td>
+          <td class="wrap"><strong>Fixed:</strong> <code>Reviews.counterRegression</code> now checks both flat <code>{away, home}</code> and nested <code>{manager, abs}</code> objects so backwards-moving official counters are flagged as irregularities instead of silently skipped.</td>
+          <td class="wrap"><a href="https://statsapi.mlb.com/api/v1.1/game/849799/feed/live?fields=gameData,review,absChallenges,hasChallenges,away,home,used,remaining,usedSuccessful,usedFailed" target="_blank" rel="noopener">feed/live 849799 (counters)</a></td>
+          <td class="status-ok">Fixed &amp; regression-tested</td>
+        </tr>
+        <tr>
+          <td>AF-3</td>
+          <td class="wrap">Pre-ruling <code>Before review</code> score inferred on already-resolved <code>runsAtRiskCount === 0</code> reviews</td>
+          <td></td>
+          <td class="wrap"><strong>Fixed (inference removed):</strong> when a page opens after a review has already resolved, the pre-ruling score was not observed; <code>reviews-feed.js</code> now leaves <code>scoreTracker.before</code> as <code>null</code> (<code>— (not observed before ruling)</code>) and shows only the official <code>Actual after</code> score.</td>
+          <td class="wrap"><a href="https://statsapi.mlb.com/api/v1/game/824638/playByPlay" target="_blank" rel="noopener">game/824638/playByPlay</a></td>
+          <td class="status-ok">Fixed &amp; regression-tested</td>
+        </tr>
+        <tr>
+          <td>AF-4</td>
+          <td class="wrap">Persistent red <code>#banner</code> for active Runs at Risk reviews on <code>reviews.html</code>, offseason recent-date jump on <code>reviews.html</code>, and cross-page <code>?date=</code> preservation</td>
+          <td class="wrap"><code>2026-10-28</code> (<code>totalGames: 1</code>, game 849799)</td>
+          <td class="wrap"><strong>Fixed:</strong> <code>reviews-feed.js</code> renders <code>#banner</code> while any review with runs at risk is in progress, offers the cached 45-day <code>scheduleRange</code> jump button on empty offseason slates, and keeps <code>?date=</code> in step across <code>index.html</code> ↔ <code>reviews.html</code> ↔ <code>game.html</code>.</td>
+          <td class="wrap"><a href="https://statsapi.mlb.com/api/v1/schedule?sportId=1&amp;startDate=2026-10-01&amp;endDate=2026-11-22&amp;fields=dates,date,totalGames" target="_blank" rel="noopener">scheduleRange Oct–Nov 2026</a></td>
+          <td class="status-ok">Fixed &amp; regression-tested</td>
+        </tr>
+        <tr>
+          <td>AF-5</td>
+          <td class="wrap">Official ABS challenger role (<code>batter</code> / <code>catcher</code> / <code>pitcher</code>), <code>playEvents[].index</code> run attribution, <code>isPitch</code>-only pitch counts, strict calendar <code>isValidISODate</code>, non-zero-filled <code>countDots</code>/<code>outsDots</code>, and <code>gameFeed</code> 404 fallback bundle</td>
+          <td class="wrap"><code>"Jonah Heim challenged (pitch result)…"</code> (<code>challengeTeamId: 133</code>, game 824960 play 34)</td>
+          <td class="wrap"><strong>Fixed:</strong> challenger role is read strictly from official play text or <code>battingSide</code> vs <code>challengerSide</code>; absent count/outs render <code>—</code> instead of zero-filling <code>0-0, 0 outs</code>; calendar validation rejects impossible dates such as <code>2026-02-31</code>; and the documented <code>/playByPlay</code> + <code>/boxscore</code> + <code>/linescore</code> 404 bundle is wired.</td>
+          <td class="wrap"><a href="https://statsapi.mlb.com/api/v1/game/824960/playByPlay?fields=allPlays,about,atBatIndex,inning,halfInning,result,description,reviewDetails,reviewType,challengeTeamId" target="_blank" rel="noopener">game/824960/playByPlay</a></td>
+          <td class="status-ok">Fixed &amp; regression-tested</td>
+        </tr>
+        <tr>
+          <td>AF-6</td>
+          <td class="wrap"><code>server.mjs</code> &amp; <code>feed-log.js</code> <code>atBatIndex === 0</code> falsy merge-key collision and <code>server.mjs</code> dotfile/symlink static containment</td>
+          <td class="wrap">HTTP <code>403</code> on <code>/.git/HEAD</code>; distinct key <code>gamePk:0</code></td>
+          <td class="wrap"><strong>Fixed:</strong> merge-key builders treat <code>0</code> as a valid index instead of falsy <code>""</code>, <code>server.mjs</code> preserves top-level entry fields during merges, and static serving rejects hidden dotfile paths (except <code>.nojekyll</code>) and symlinks via <code>fs.lstat</code>.</td>
+          <td class="wrap"><a href="https://github.com/snapquast73-boop/LIVPBP/blob/main/server.mjs" target="_blank" rel="noopener">github.com/snapquast73-boop/LIVPBP/blob/main/server.mjs</a></td>
+          <td class="status-ok">Fixed &amp; regression-tested</td>
+        </tr>
+        <tr>
+          <td>AF-7</td>
+          <td class="wrap">Mid-PA ABS challenge in game <code>824960</code> (<code>2026-08-08</code>, BAL @ ATH, <code>atBatIndex: 80</code> Bot 10) carries structured <code>reviewDetails</code> on a pitch event while <code>result.description</code> omits challenge prose</td>
+          <td class="wrap"><code>reviewDetails: {isOverturned:false, inProgress:false, reviewType:"MJ", challengeTeamId:110}</code></td>
+          <td class="wrap"><strong>Flagged for review:</strong> MLB's structured pitch-level <code>reviewDetails</code> records the challenge even when the final play summary text omits it; the app reads structured <code>reviewDetails</code> + <code>challengeTeamId</code> directly and never invents missing prose.</td>
+          <td class="wrap"><a href="https://statsapi.mlb.com/api/v1/game/824960/playByPlay?fields=allPlays,about,atBatIndex,inning,halfInning,result,description,playEvents,index,details,reviewDetails,isOverturned,inProgress,reviewType,challengeTeamId" target="_blank" rel="noopener">game/824960/playByPlay (atBatIndex 80)</a></td>
+          <td class="status-flag">Flagged — structured field used</td>
+        </tr>
+      </tbody>
+    </table>
+
+
+    <h2>14. Reference-parity functional pass (session <code>6e2a58d9</code>, 2026-11-22)</h2>
     <p>
       Compared the site line by line with the two supplied reference sites
       (<a href="https://snapquast73-boop.github.io/LIVPBP2/reviews.html" target="_blank" rel="noopener">LIVPBP2</a> ·
@@ -824,7 +898,7 @@ node server.mjs                  # optional persistence backend (feed log + SSE)
           <td>R2-4</td>
           <td class="wrap">The challenges-remaining tracker lacked the README's team prefix and both-teams summary; ABS counter lines never rendered at all (the playByPlay payload carries no counter nodes).</td>
           <td class="wrap">README example rows are exactly <code>CIN: 2 ABS challenges left now (2 successful · 0 failed)</code>, <code>PIT: 1 manager challenge left now (0 used)</code>, summary <code>Challenges left: CIN 1 MGR · 2 ABS — CHC 1 MGR · 2 ABS</code> “on hover and on the Under-Review live strip”. Official manager counters live on <code>schedule?hydrate=review</code>; ABS counters only on <code>feed/live gameData.absChallenges</code>.</td>
-          <td class="wrap">Fixed: prefixed counter lines, hover summary, strip summary, and ABS counters via the verified lean <code>feed/live</code> projection. Asserted byte-exact against the README examples in <code>tools/smoke-test.mjs</code> §[12].</td>
+          <td class="wrap">Fixed: prefixed counter lines, hover summary, strip summary, and ABS counters via the verified lean <code>feed/live</code> projection. Asserted byte-exact against the README examples in <code>tools/smoke-test.mjs</code> §[13].</td>
           <td class="wrap"><a href="https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=2026-08-28&hydrate=review&fields=dates,games,gamePk,review,hasChallenges,away,home,used,remaining" target="_blank" rel="noopener">schedule counters</a> · <a href="https://statsapi.mlb.com/api/v1.1/game/824960/feed/live?fields=gameData,absChallenges,hasChallenges,away,home,usedSuccessful,usedFailed,remaining,review,used" target="_blank" rel="noopener">ABS counters</a></td>
           <td class="status-ok">Fixed</td>
         </tr>
@@ -887,10 +961,12 @@ node server.mjs                  # optional persistence backend (feed log + SSE)
       </tbody>
     </table>
     <p style="color:var(--muted);font-size:13px">
-      Checks: <code>npm test</code> → 59 passed (12 new checks, §[12]) ·
+      Checks after the parallel-session merge (see COORDINATION.md conflict log): <code>npm test</code> → 64 passed
+      (this pass's 12 checks in §[13] of <code>tools/smoke-test.mjs</code>; <code>af75fbfd</code>'s 5 in §[12]) ·
       <code>node tests/run-all.mjs</code> → syntax OK · 40 local refs OK · 8 bindings OK · 47/47 jsdom ·
-      <code>node tools/restoration-check.mjs</code> → ALL CHECKS PASSED. Earlier items
-      (U-1…U-11, I-8, F-001…F-009, L-1…L-4, RR-01…RR-06, D-1…D-4) keep their status above;
+      <code>node tools/restoration-check.mjs</code> → ALL CHECKS PASSED ·
+      <code>node tests/props-provenance-test.mjs</code> → 5 passed. Earlier items
+      (U-1…U-11, I-8, F-001…F-009, L-1…L-4, RR-01…RR-06, D-1…D-4, AF-1…AF-7) keep their status above;
       RR-05 is answered by R2-3.
     </p>
 

@@ -558,6 +558,112 @@ node tools/restoration-check.mjs -> ALL CHECKS PASSED
   - [`/flagged.html`](https://snapquast73-boop.github.io/LIVPBP/flagged.html) → renders; sections 1–12 serve.
 - **Acceptance vs the user's cited sites:** this repo's Replay Feed and Scoreboard now match the behaviour of the cited working references for the same date — the GitHub Page is functional for uploaded-project review purposes. Remaining open items (unchanged, owner-reviewed on `flagged.html`): U-1, U-2, U-6…U-11, I-8, F-001…F-009, L-1…L-4, RR-05, D-1, D-3, D-4. This PR (#27) carries only this record.
 
+#### Note from session `d105b565` on the same collision (added here, after the entry above)
+
+Session `aa6c1d7b` implemented `?date=` deep links independently while this session was doing the
+same thing, and its PR #24 merged after PR #23. Nothing was lost and nothing was overwritten:
+
+- The **implementation** on `main` is this session's (`b50251a`, in `assets/js/scoreboard.js`
+  and `assets/js/reviews-feed.js`); `aa6c1d7b` kept it verbatim in `fb6c945` and did not
+  re-apply its own copies.
+- `aa6c1d7b`'s **additive** work stayed: its 10 jsdom regression checks
+  (`tests/jsdom-render-test.mjs` §3b) and its README deep-link bullet.
+- Combined state on `main` @ `f22a84b` re-checked by this session: `npm test` → **47 passed,
+  0 failed**; `node tests/run-all.mjs` → syntax OK · 40 local refs OK · 8 bindings OK ·
+  **47/47 jsdom** (their §3b checks + the original 37). GitHub Pages built `f22a84b`
+  ([`pages/builds/latest`](https://api.github.com/repos/snapquast73-boop/LIVPBP/pages/builds/latest)).
+- Lesson for later sessions: `assets/js/scoreboard.js` and `assets/js/reviews-feed.js` were a
+  hot spot twice in one hour — claim them on this board before editing.
+
+---
+
+# Session `arena/ca40f7ec-livpbp` — Non-Overlapping Provenance, Props & Stylesheet Polish (`2026-11-22`)
+
+- **Session ID:** `ca40f7ec` · **Branch (fixed by Arena):** `arena/ca40f7ec-livpbp`, merged with `main` @ [`1e67246`](https://github.com/snapquast73-boop/LIVPBP/commit/1e67246).
+- **Coordination & non-overlapping scope check (`2026-11-22`):**
+  - Merged sessions `d105b565` (PRs [#23](https://github.com/snapquast73-boop/LIVPBP/pull/23), [#25](https://github.com/snapquast73-boop/LIVPBP/pull/25), [#26](https://github.com/snapquast73-boop/LIVPBP/pull/26)) and `aa6c1d7b` (PRs [#24](https://github.com/snapquast73-boop/LIVPBP/pull/24), [#27](https://github.com/snapquast73-boop/LIVPBP/pull/27)) completed their tasks on `main` (`COORDINATION.md` merge conflict resolved by preserving both sessions' entries verbatim).
+  - Active parallel branch `arena/af75fbfd-livpbp` holds claims on `assets/js/{api,ui,reviews,scoreboard,game,reviews-feed,feed-log}.js`, `server.mjs`, `README.md`, `docs/*.md`, `flagged.html`, `tools/smoke-test.mjs`, `tests/jsdom-render-test.mjs`.
+  - To respect strict non-overlapping file scopes while `af75fbfd` is in flight, `ca40f7ec` edited **only unclaimed files**: `assets/js/props.js`, `assets/css/style.css`, and additive standalone verification test `tests/props-provenance-test.mjs` (plus append-only coordination notes here). Cross-scope observations for `af75fbfd`'s scope are logged below as handoff notes rather than conflicting edits.
+
+## Task Board (`arena/ca40f7ec-livpbp`)
+
+| Task ID | Task Description | Status | Owning Session | File Scope | Official Source |
+| --- | --- | --- | --- | --- | --- |
+| `CA40-1` | Per-row official MLB StatsAPI `https://` source links on `<table class="driver-table">` in `assets/js/props.js` + honest season-total provenance note on historical/completed games (`U-6` / `I-4`) | `done` | `arena/ca40f7ec-livpbp` | `assets/js/props.js`, `assets/css/style.css` | [MLB `people/{id}/stats`](https://statsapi.mlb.com/api/v1/people/660271/stats?stats=season,statSplits,expectedStatistics&group=hitting&season=2026&sitCodes=vl,vr,h,a,d,n,risp) · [MLB `vsPlayer`](https://statsapi.mlb.com/api/v1/people/694192/stats?stats=vsPlayer&group=hitting&opposingPlayerId=656876) |
+| `CA40-2` | Style `.driver-table` and per-row `.src-cell` cleanly in `assets/css/style.css` without altering existing rules | `done` | `arena/ca40f7ec-livpbp` | `assets/css/style.css` | [`assets/css/style.css` on `main`](https://github.com/snapquast73-boop/LIVPBP/blob/main/assets/css/style.css) |
+| `CA40-3` | Standalone regression test `tests/props-provenance-test.mjs` verifying every rendered `<table class="driver-table">` row has a verified official `statsapi.mlb.com` source link and zero fabricated values | `done` | `arena/ca40f7ec-livpbp` | `tests/props-provenance-test.mjs` | [MLB `game/824638/feed/live`](https://statsapi.mlb.com/api/v1.1/game/824638/feed/live) |
+| `CA40-4` | Merge-preserving integration: merge latest `main` (preserving PRs #24, #26, #27), run full test suites, open & merge PR, confirm GitHub Pages deploy, and record here | `done` | `arena/ca40f7ec-livpbp` | `COORDINATION.md` | [GitHub Pages API](https://api.github.com/repos/snapquast73-boop/LIVPBP/pages) |
+
+### Verification & Cross-Scope Handoff Notes (`ca40f7ec`)
+
+| Check / Handoff Item | Official Source | Result / Status |
+| --- | --- | --- |
+| Live StatsAPI `people/{id}/stats` (`season`, `expectedStatistics.avg`, `statSplits`, `gameLog`) & `vsPlayer` (`vsPlayerTotal`) | [`people/660271/stats`](https://statsapi.mlb.com/api/v1/people/660271/stats?stats=season,statSplits,expectedStatistics&group=hitting&season=2026&sitCodes=vl,vr) · [`people/694192/stats?stats=vsPlayer`](https://statsapi.mlb.com/api/v1/people/694192/stats?stats=vsPlayer&group=hitting&opposingPlayerId=656876) | Verified: `Props.renderPropsTab` now renders `<table class="driver-table">` where every `<tr>` carries a direct `td.src-cell` link to the exact official `statsapi.mlb.com` endpoint its input came from (`people/{id}/stats`, `vsPlayer`, or `game/{pk}/feed/live`), plus Batter/Pitcher card `MLB API ↗` links and an explicit `U-6` disclosure on historical/completed games |
+| Reference sites parity (`LIVPBP2` & `POSTSSNALRT`) vs `LIVPBP` on `2026-08-28` (`15` finals) and `2026-10-28` (`WS G5`) | [`LIVPBP2/reviews.html?date=2026-08-28`](https://snapquast73-boop.github.io/LIVPBP2/reviews.html?date=2026-08-28) · [`POSTSSNALRT/reviews.html`](https://snapquast73-boop.github.io/POSTSSNALRT/reviews.html) · [`schedule?date=2026-08-28`](https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=2026-08-28&hydrate=probablePitcher,linescore,decisions,review) | Verified: `?date=YYYY-MM-DD` deep links, `10` reviews & challenges / `79` ABS challenges on `2026-08-28`, offseason jump (`2026-10-28`), and `game.html?gamePk=824638` match working reference behavior |
+| Handoff note for `af75fbfd` (owns `assets/js/{api,game,reviews-feed,feed-log}.js` & `server.mjs`) | [`v1.1/game/824638/feed/live`](https://statsapi.mlb.com/api/v1.1/game/824638/feed/live?fields=gamePk,gameData,review,absChallenges,away,home,used,remaining,usedSuccessful,usedFailed,hasChallenges) · [`schedule?startDate=2025-10-01&endDate=2026-04-01`](https://statsapi.mlb.com/api/v1/schedule?sportId=1&startDate=2025-10-01&endDate=2026-04-01&fields=dates,date,totalGames) | Logged without touching claimed files: (1) winter offseason gap Nov 1 → Feb 20 is ~111 days if widening schedule-range lookback; (2) `game.js` in-review lean poll `fields` should include `isComplete` alongside `hasReview`; (3) `server.mjs` / `feed-log.js` `atBatIndex: 0` falsy `\|\|` merge key |
+| Automated checks (`props-provenance-test`, `smoke-test`, `restoration-check`, `run-all`) | [`tests/props-provenance-test.mjs`](tests/props-provenance-test.mjs) · [`tools/smoke-test.mjs`](tools/smoke-test.mjs) | `5/5` props provenance · `47/47` smoke · `ALL CHECKS PASSED` restoration · `47/47` jsdom render + syntax + link + contract · `88/88` `flagged.html` rows linked |
+
+### Integration Record (`ca40f7ec`)
+
+- **[PR #28](https://github.com/snapquast73-boop/LIVPBP/pull/28) — MERGED** at `2026-11-22T02:02Z`, merge commit [`c1bd74d79c1f656847dcbf2d7a6ecac72735bed0`](https://github.com/snapquast73-boop/LIVPBP/commit/c1bd74d79c1f656847dcbf2d7a6ecac72735bed0).
+- **CI & Deployment Checks:**
+  - PR #28 `Site checks` ([run `44974127379`](https://github.com/snapquast73-boop/LIVPBP/actions/runs/44974127379)): `test` **pass** + `dom-smoke` **pass**.
+  - `main` `Site checks` ([run `44974170680`](https://github.com/snapquast73-boop/LIVPBP/actions/runs/44974170680)): **success**.
+  - `pages-build-deployment` ([run `44974170064`](https://github.com/snapquast73-boop/LIVPBP/actions/runs/44974170064)) & [`pages/builds/latest`](https://api.github.com/repos/snapquast73-boop/LIVPBP/pages/builds/latest): commit `c1bd74d` status **`built`** (`2026-11-22T02:02:26Z`).
+  - `Published Pages delivery` ([run `44974212989`](https://github.com/snapquast73-boop/LIVPBP/actions/runs/44974212989)): **success**.
+- **Live GitHub Pages URLs verified (`2026-11-22`):**
+  - [`/?date=2026-08-28`](https://snapquast73-boop.github.io/LIVPBP/?date=2026-08-28) → all 15 Finals render (`CIN 10–8 CHC`, `LAD 2–1 DET`, etc.).
+  - [`/reviews.html?date=2026-08-28`](https://snapquast73-boop.github.io/LIVPBP/reviews.html?date=2026-08-28) → `10 Reviews · 8 Challenges · 2 Umpire reviews · 79 ABS challenges · 2 Runs at risk · 89 tracked entries` matching [`LIVPBP2/reviews.html?date=2026-08-28`](https://snapquast73-boop.github.io/LIVPBP2/reviews.html?date=2026-08-28).
+  - [`/game.html?gamePk=824638`](https://snapquast73-boop.github.io/LIVPBP/game.html?gamePk=824638) → full header, linescore with per-row `feed/live` source links, PBP with ABS pitch challenge indicators, Box Score, Props & Matchup driver table with per-row official source links, and Reviews tab.
+  - [`/flagged.html`](https://snapquast73-boop.github.io/LIVPBP/flagged.html) → sections 1–12 live, 88/88 rows carrying verified official `https://` source links and blank cells on unconfirmed values.
+
+---
+
+# Session `arena/af75fbfd-livpbp` — Line-by-Line Functional & Provenance Parity Pass (`2026-11-22`)
+
+- **Session ID:** `af75fbfd` (branch fixed by Arena to `arena/af75fbfd-livpbp`, branched from `main` @ [`59a7351`](https://github.com/snapquast73-boop/LIVPBP/commit/59a73511af5b90e41b678db3c5005502cee54dda), rebased onto [`1411fbc`](https://github.com/snapquast73-boop/LIVPBP/commit/1411fbc70905ad11263f0cadf8f99becd2d83cb7) preserving `d105b565` PR #23/#25/#26, `aa6c1d7b` PR #24/#27, and `ca40f7ec` PR #28/#29 verbatim).
+- **Stale-claim check (`2026-11-22T02:05Z`):** Inspected all remote branches and open PRs (`0` open PRs). Merged sessions `d105b565`, `aa6c1d7b`, and `ca40f7ec` preserved completely; all three `ca40f7ec` handoff items (`180d` winter offseason lookback, `isComplete`/`inProgress` lean review probe + `gamePk` passed into `Props.getForecast`, and `atBatIndex: 0` merge key) are incorporated in this branch.
+
+## Task Board (`arena/af75fbfd-livpbp`)
+
+| Task ID | Task Description | Status | Owning Session | File Scope | Official Source |
+| --- | --- | --- | --- | --- | --- |
+| `AF-1` | Line-by-line audit of HTML, JS, CSS, `server.mjs`, `README.md`, `docs/*.md`, `flagged.html`, and live reference sites (`LIVPBP2`, `POSTSSNALRT`) | `done` | `arena/af75fbfd-livpbp` | `COORDINATION.md` | [LIVPBP main `f22a84b`](https://github.com/snapquast73-boop/LIVPBP/commit/f22a84bfd424bad65a8962d84755d6a76ad5d2b6) · [MLB StatsAPI schedule](https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=2026-08-28&hydrate=probablePitcher,linescore,decisions,review) |
+| `AF-2` | Cross-page `?date=` navigation (`index.html` ↔ `reviews.html` ↔ `game.html`), offseason jump on `reviews.html`, leaf-projected `feed/live` ABS/MGR counter ingestion, `#banner` Runs at Risk, both-teams counter summary, ABS challenger role, counter-regression nesting fix, and removal of resolved-score `before` inference | `done` | `arena/af75fbfd-livpbp` | `assets/js/api.js`, `assets/js/ui.js`, `assets/js/reviews.js`, `assets/js/scoreboard.js`, `assets/js/game.js`, `assets/js/reviews-feed.js`, `assets/js/feed-log.js` | [MLB `feed/live` `824638`](https://statsapi.mlb.com/api/v1.1/game/824638/feed/live?fields=gameData,review,absChallenges,hasChallenges,away,home,used,remaining,usedSuccessful,usedFailed) · [MLB `playByPlay` `824960`](https://statsapi.mlb.com/api/v1/game/824960/playByPlay?fields=allPlays,about,atBatIndex,result,description,reviewDetails,reviewType,challengeTeamId) |
+| `AF-3` | `server.mjs` + `feed-log.js` `atBatIndex: 0` merge-key fix and dotfile/symlink static containment hardening | `done` | `arena/af75fbfd-livpbp` | `server.mjs`, `assets/js/feed-log.js` | [`server.mjs` on `main`](https://github.com/snapquast73-boop/LIVPBP/blob/main/server.mjs) |
+| `AF-4` | Per-row official `https://` source links on all Markdown/HTML tables (`README.md`, `docs/*.md`, `tests/README.md`, `flagged.html`), flagged irregularities (`AF-1..AF-7`), regression tests (`52/52` smoke, `47/47` jsdom, `5/5` props provenance), PR #30 merge, and live GitHub Pages verification | `done` | `arena/af75fbfd-livpbp` | `README.md`, `docs/verification-report.md`, `tests/README.md`, `flagged.html`, `tools/smoke-test.mjs`, `tools/restoration-check.mjs`, `COORDINATION.md` | [GitHub Pages API](https://api.github.com/repos/snapquast73-boop/LIVPBP/pages) |
+
+## Verification & Provenance Log (`arena/af75fbfd-livpbp`)
+
+- **Official sources fetched & cross-checked line by line (`2026-11-22`):**
+  - [`/api/v1.1/game/824638/feed/live?fields=gameData,review,absChallenges,…`](https://statsapi.mlb.com/api/v1.1/game/824638/feed/live?fields=gameData,review,absChallenges,hasChallenges,away,home,used,remaining,usedSuccessful,usedFailed) & [`/api/v1.1/game/849799/feed/live?fields=…`](https://statsapi.mlb.com/api/v1.1/game/849799/feed/live?fields=gameData,review,absChallenges,hasChallenges,away,home,used,remaining,usedSuccessful,usedFailed) — verified `gameData.absChallenges` exists on `feed/live` (not `playByPlay`), confirming why `reviews-feed.js` previously failed to render ABS counters (`AF-1`).
+  - [`/api/v1/game/824960/playByPlay`](https://statsapi.mlb.com/api/v1/game/824960/playByPlay?fields=allPlays,about,atBatIndex,inning,halfInning,result,description,playEvents,index,details,reviewDetails,isOverturned,inProgress,reviewType,challengeTeamId) — verified ABS challenger role wording (`"Jonah Heim challenged (pitch result)…"` on `atBatIndex: 34`, `AF-5`) and flagged `atBatIndex: 80` where pitch-level `reviewDetails` is present without challenge prose in `result.description` (`AF-7`).
+  - [`/api/v1/game/775296/linescore`](https://statsapi.mlb.com/api/v1/game/775296/linescore) vs [`/api/v1.1/game/775296/feed/live`](https://statsapi.mlb.com/api/v1.1/game/775296/feed/live?fields=gamePk,liveData,linescore,teams,away,home,runs,hits,errors) — re-confirmed upstream error-count discrepancy (`2` vs `3`).
+  - [`/api/v1/schedule?sportId=1&startDate=2026-10-01&endDate=2026-11-22`](https://statsapi.mlb.com/api/v1/schedule?sportId=1&startDate=2026-10-01&endDate=2026-11-22&fields=dates,date,totalGames) — confirmed latest 2026 postseason game date `2026-10-28` (`totalGames: 1`, game `849799`).
+  - Reference deployments [`LIVPBP2/reviews.html?date=2026-08-28`](https://snapquast73-boop.github.io/LIVPBP2/reviews.html?date=2026-08-28) and [`POSTSSNALRT/reviews.html`](https://snapquast73-boop.github.io/POSTSSNALRT/reviews.html) — verified full parity on `?date=` deep links, cross-page date navigation, MGR/ABS challenge counters, both-teams summaries, `#banner` Runs at Risk alerts, and offseason date jump.
+- **Test & Link Suites Executed:**
+  - `npm test` (`tools/smoke-test.mjs`): **52 passed, 0 failed** (+5 new `AF-1..AF-6` checks in §[12]).
+  - `node tools/restoration-check.mjs`: **ALL CHECKS PASSED** (including `GET /.git/HEAD -> 403` and `atBatIndex: 0` merge preservation).
+  - `node tests/run-all.mjs`: **syntax OK · 40 local references OK · 8 DOM bindings OK · 47/47 jsdom render checks OK**.
+  - `node tests/props-provenance-test.mjs`: **5 passed, 0 failed** (with `game.js` passing `gamePk` into `Props.getForecast`).
+  - Table-row provenance check: **102/102 Markdown data rows** (`README.md`, `docs/*.md`, `audit/*.md`, `tests/README.md`) + **95/95 `flagged.html` data rows** carry clickable `https://` official source links, with blank cells on all unconfirmed items.
+
+## Integration Record (`arena/af75fbfd-livpbp`)
+
+- **[PR #30](https://github.com/snapquast73-boop/LIVPBP/pull/30) — MERGED** at `2026-11-22T02:09:33Z`, merge commit [`253741219b0054eebcaab4b78c80d695bc3cc647`](https://github.com/snapquast73-boop/LIVPBP/commit/253741219b0054eebcaab4b78c80d695bc3cc647).
+- **CI & GitHub Pages Deployment Checks:**
+  - PR #30 `Site checks` ([run `44974714527`](https://github.com/snapquast73-boop/LIVPBP/actions/runs/44974714527)): `test` **pass** + `dom-smoke` **pass**.
+  - `main` `Site checks` ([run `44974760255`](https://github.com/snapquast73-boop/LIVPBP/actions/runs/44974760255)): **success**.
+  - `pages-build-deployment` ([run `44974759685`](https://github.com/snapquast73-boop/LIVPBP/actions/runs/44974759685)) & [`pages/builds/latest`](https://api.github.com/repos/snapquast73-boop/LIVPBP/pages/builds/latest): commit `2537412` status **`built`** (`2026-11-22T02:09:53Z`).
+  - `Published Pages delivery` ([run `44974797013`](https://github.com/snapquast73-boop/LIVPBP/actions/runs/44974797013)): **success**.
+- **Live GitHub Pages URLs verified (`2026-11-22`):**
+  - [`/?date=2026-08-28`](https://snapquast73-boop.github.io/LIVPBP/?date=2026-08-28) → all 15 Finals render (`CIN 10–8 CHC`, `LAD 2–1 DET`, …) with `?date=2026-08-28` preserved on every game link (`game.html?gamePk=824638&date=2026-08-28`).
+  - [`/reviews.html?date=2026-08-28`](https://snapquast73-boop.github.io/LIVPBP/reviews.html?date=2026-08-28) → `10 Reviews · 8 Challenges · 2 Umpire reviews · 79 ABS challenges · 2 Runs at risk · 89 tracked entries`, both-teams MGR/ABS counter summaries (`PIT 1 MGR · 2 ABS — STL 1 MGR · 2 ABS`), and zero inferred `Before review` scores on post-ruling rows (`— (not observed before ruling)`).
+  - [`/game.html?gamePk=824638`](https://snapquast73-boop.github.io/LIVPBP/game.html?gamePk=824638) → full header, linescore with per-row `feed/live` source links, PBP with ABS pitch challenge indicators, Box Score, Props & Matchup driver table with `gamePk`-linked per-row official source links, and Reviews tab.
+  - [`/flagged.html`](https://snapquast73-boop.github.io/LIVPBP/flagged.html) → sections 1–13 (`AF-1..AF-7`) live, `95/95` rows carrying verified official `https://` source links and blank cells on unconfirmed values.
+
+
+
 ---
 
 # Session `arena/6e2a58d9-livpbp` — reference-parity functional pass (2026-11-22)
@@ -578,7 +684,7 @@ node tools/restoration-check.mjs -> ALL CHECKS PASSED
 | G-6 Regression checks for G-1…G-9; full suites stay green | done | `6e2a58d9` | `tools/smoke-test.mjs`, `tests/jsdom-render-test.mjs` (extend only) | `npm test`, `node tests/run-all.mjs`, `node tools/restoration-check.mjs` must pass |
 | G-7 Line-by-line reference-parity audit + flagged entries (RR-05 resolved: raindrop chime kept per README/LIVPBP2, POSTSSNALRT cha-ching deviation documented) | done | `6e2a58d9` | `audit/reference-parity-2026-11-22.md`, `flagged.html` (extend only) | Every claim links an official or first-party source; unverifiable originals stay blank |
 | G-8 Integration: PR → `main`, merge, confirm Pages, record here | claimed | `6e2a58d9` | `COORDINATION.md` | Do not merge a broken site; flagged items do not block |
-| G-9 Fixes found during the line-by-line pass: irregularity notes were misattributed to every row of a game; boundary-call classification included charged manager challenges (registry `MH`/`MD`/`MO`/`MT`/`MS` are "Manager challenge: …"); `counterRegression` was called with the wrong shape (no-op) | done | `6e2a58d9` | `assets/js/reviews.js`, `assets/js/reviews-feed.js`, `assets/css/style.css` | Sources: [gameStatus registry](https://statsapi.mlb.com/api/v1/gameStatus) · uploaded `README.md` ("NH = boundary-call review"; "boundary reviews are not charged"); recorded as R2-6/R2-8/R2-9 on `flagged.html` §13 |
+| G-9 Fixes found during the line-by-line pass: irregularity notes were misattributed to every row of a game; boundary-call classification included charged manager challenges (registry `MH`/`MD`/`MO`/`MT`/`MS` are "Manager challenge: …"); `counterRegression` was called with the wrong shape (no-op) | done | `6e2a58d9` | `assets/js/reviews.js`, `assets/js/reviews-feed.js`, `assets/css/style.css` | Sources: [gameStatus registry](https://statsapi.mlb.com/api/v1/gameStatus) · uploaded `README.md` ("NH = boundary-call review"; "boundary reviews are not charged"); recorded as R2-6/R2-8/R2-9 on `flagged.html` §14 |
 
 ### Merge-conflict resolution log (2026-11-22, `6e2a58d9`)
 
@@ -591,3 +697,4 @@ node tools/restoration-check.mjs -> ALL CHECKS PASSED
   sessions had already merged the `?date=` deep-link fix this session planned as G-1 (their
   implementations + the `d105b565` URL-sync variant are on `main`), so G-1 is marked superseded
   and this session verifies the merged behavior instead of re-implementing it.
+- 2026-11-22 — Second merge-conflict resolution log (integration of this branch with `main` @ `8583382`, PRs #28–#31): while this session's G-1…G-9 pass was in flight, session `af75fbfd` independently completed an overlapping functional pass (its `AF-1…AF-7`, PRs #30/#31) and session `ca40f7ec` added props/style work (PRs #28/#29). `git merge origin/main` conflicted in `COORDINATION.md`, `assets/js/api.js`, `assets/js/reviews-feed.js`, `tools/smoke-test.mjs`, `flagged.html`; `assets/js/reviews.js` auto-merged with a duplicated `countersSummary` mix. Resolution principle: **keep every fix from both sides, discard nothing.** Result: (1) the deployed `af75fbfd` implementation is the base of `reviews-feed.js`/`api.js`/`reviews.js` (their ABS/MGR counter fetch + cache, `counterRegression` flat-and-nested, AF-3 "never infer the Before score", `offerRecentDate` offseason jump, `server.mjs`/`feed-log.js` hardening all kept verbatim); (2) this session's **unique** fixes were ported on top: G-2 empty-state notice, G-3 chimes for pending rulings / scoring changes / the moment runs-at-risk first becomes visible (once per review; restored rows pre-marked), G-5 "score impact pending", README `CIN:`-prefix counter lines, and G-9 entry-scoped irregularity attribution + game-level flagged rows; (3) `Reviews.countersSummary` is one function accepting both label key spellings; (4) `tools/smoke-test.mjs` keeps **both** regression sections (`af75fbfd`'s §[12] and this session's §[13], 12 checks); (5) `flagged.html` keeps both new sections (§13 `af75fbfd`, §14 `6e2a58d9`); (6) `api.js` took `af75fbfd`'s superset `gameFeed` (its extra `/playByPlay` bundle fallback plus the shared `opts.fields` projection). No force-push anywhere.

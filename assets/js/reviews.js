@@ -247,6 +247,26 @@
     return 'Not specified in payload';
   }
 
+  /* Official ABS challenger role (batter vs catcher/pitcher) derived strictly
+   * from official matchup names in play/event description or battingSide vs
+   * challengerSide — never guessed when challengerSide is unknown. */
+  function absChallengerRole(play, eventDescription, playDescription, battingSide, challengerSide) {
+    var batterName = (play && play.matchup && play.matchup.batter && play.matchup.batter.fullName) || '';
+    var pitcherName = (play && play.matchup && play.matchup.pitcher && play.matchup.pitcher.fullName) || '';
+    var text = String((eventDescription || '') + ' ' + (playDescription || ''));
+    if (batterName && text.indexOf(batterName + ' challenged') !== -1) return 'batter';
+    if (pitcherName && text.indexOf(pitcherName + ' challenged') !== -1) return 'pitcher';
+    if (/challenged\s*\(pitch result\)/i.test(text)) {
+      if (challengerSide === 'away' || challengerSide === 'home') {
+        return challengerSide === battingSide ? 'batter' : 'catcher';
+      }
+    }
+    if (challengerSide === 'away' || challengerSide === 'home') {
+      return challengerSide === battingSide ? 'batter' : 'catcher / pitcher';
+    }
+    return null;
+  }
+
   /**
    * extractReviews(plays, meta)
    *   meta: { gamePk, teams:{away:{id,name},home:{id,name}}, feed }
@@ -279,7 +299,11 @@
         var inning = Number(about.inning) || null;
         var halfInning = about.halfInning || (about.isTopInning === false ? 'bottom' : 'top');
         var battingSide = String(halfInning).toLowerCase().indexOf('top') === 0 ? 'away' : 'home';
-        var runs = runsForEvent(play, playIndex === null ? null : playIndex);
+        var eventIndex = (playIndex !== null && events[playIndex] &&
+          typeof events[playIndex].index === 'number' && isFinite(events[playIndex].index))
+          ? Number(events[playIndex].index)
+          : (playIndex === null ? null : playIndex);
+        var runs = runsForEvent(play, eventIndex);
         var score = scoreOf(play, meta.feed);
         var scoreAfter = score;
         var possible = null;
@@ -329,6 +353,7 @@
           challengingTeamId: details.challengeTeamId || null,
           challengerSide: side,
           challenger: challengerLabel(side, teams, gamePk),
+          challengerRole: info.isABS ? absChallengerRole(play, eventDescription, playDesc, battingSide, side) : null,
           inProgress: details.inProgress === true,
           isOverturned: typeof details.isOverturned === 'boolean' ? details.isOverturned : null,
           outcome: outcomeLabel(details),
@@ -570,20 +595,53 @@
   }
 
   /* Counter that moved backwards between two observations = irregularity.
-   * Never silently corrected (README §"challenges-remaining tracker"). */
+   * Never silently corrected (README §"challenges-remaining tracker").
+   * Accepts either flat `{ away, home }` or nested `{ manager, abs }` snapshots. */
   function counterRegression(prev, next) {
     if (!prev || !next) return null;
     var notes = [];
-    ['away', 'home'].forEach(function (side) {
-      var p = prev[side] || {};
-      var n = next[side] || {};
-      ['used', 'usedSuccessful', 'usedFailed', 'remaining'].forEach(function (field) {
-        if (typeof p[field] === 'number' && typeof n[field] === 'number' && n[field] < p[field]) {
-          notes.push(side + '.' + field + ' moved backwards (' + p[field] + ' → ' + n[field] + ')');
-        }
+    function checkPair(pRoot, nRoot, prefix) {
+      if (!pRoot || !nRoot) return;
+      ['away', 'home'].forEach(function (side) {
+        var p = pRoot[side] || {};
+        var n = nRoot[side] || {};
+        ['used', 'usedSuccessful', 'usedFailed', 'remaining'].forEach(function (field) {
+          if (typeof p[field] === 'number' && typeof n[field] === 'number' && n[field] < p[field]) {
+            notes.push((prefix ? prefix + '.' : '') + side + '.' + field + ' moved backwards (' + p[field] + ' → ' + n[field] + ')');
+          }
+        });
       });
-    });
+    }
+    if (prev.away || prev.home || next.away || next.home) {
+      checkPair(prev, next, '');
+    }
+    if (prev.manager || next.manager) checkPair(prev.manager, next.manager, 'manager');
+    if (prev.abs || next.abs) checkPair(prev.abs, next.abs, 'abs');
     return notes.length ? notes : null;
+  }
+
+  /* Both-teams summary from the uploaded README:
+   * "Challenges left: CIN 1 MGR · 2 ABS — CHC 1 MGR · 2 ABS" — shown on hover
+   * of a row's counter and on the Under-Review live strip. Team labels come
+   * from meta.awayLabel/meta.homeLabel (or meta.awayAbbr/homeAbbr). Official
+   * counters only: an absent counter (pre-ABS seasons have no absChallenges
+   * object) is omitted, never zero-filled; if nothing is known the summary
+   * is ''. */
+  function countersSummary(meta) {
+    if (!meta) return '';
+    function sideSummary(side, abbr) {
+      var bits = [];
+      var m = meta.manager && meta.manager[side];
+      var a = meta.abs && meta.abs[side];
+      if (m && typeof m.remaining === 'number') bits.push(m.remaining + ' MGR');
+      if (a && typeof a.remaining === 'number') bits.push(a.remaining + ' ABS');
+      if (!bits.length) return '';
+      return (abbr || (side === 'away' ? 'Away' : 'Home')) + ' ' + bits.join(' · ');
+    }
+    var awayPart = sideSummary('away', meta.awayLabel || meta.awayAbbr);
+    var homePart = sideSummary('home', meta.homeLabel || meta.homeAbbr);
+    if (!awayPart && !homePart) return '';
+    return 'Challenges left: ' + (awayPart || '—') + ' — ' + (homePart || '—');
   }
 
   /* Largest-angle counter line used on feed rows and the live strip. */
@@ -614,27 +672,6 @@
     return prefix + parts.join(' · ');
   }
 
-  /* Both-teams summary from the uploaded README:
-   * "Challenges left: CIN 1 MGR · 2 ABS — CHC 1 MGR · 2 ABS" — shown on hover
-   * of a row's counter and on the Under-Review live strip. Official counters
-   * only: an absent counter (pre-ABS seasons have no absChallenges object) is
-   * omitted, never zero-filled; if nothing is known the summary is ''. */
-  function countersSummary(meta) {
-    if (!meta) return '';
-    function side(key, label) {
-      var bits = [];
-      var m = meta.manager && meta.manager[key];
-      var a = meta.abs && meta.abs[key];
-      if (m && typeof m.remaining === 'number') bits.push(m.remaining + ' MGR');
-      if (a && typeof a.remaining === 'number') bits.push(a.remaining + ' ABS');
-      return bits.length ? (label || (key === 'away' ? 'Away' : 'Home')) + ' ' + bits.join(' · ') : '';
-    }
-    var left = side('away', meta.awayLabel);
-    var right = side('home', meta.homeLabel);
-    if (!left && !right) return '';
-    return 'Challenges left: ' + (left || '—') + ' — ' + (right || '—');
-  }
-
   global.Reviews = {
     loadRegistry: loadRegistry,
     describe: describe,
@@ -652,8 +689,8 @@
     managerCounters: managerCounters,
     absCounters: absCounters,
     counterRegression: counterRegression,
-    counterLine: counterLine,
     countersSummary: countersSummary,
+    counterLine: counterLine,
     isHitEvent: isHitEvent,
     BOUNDARY_REASONS: BOUNDARY_REASONS,
     PENDING_RULING_TYPES: PENDING_RULING_TYPES,

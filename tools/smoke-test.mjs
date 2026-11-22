@@ -958,7 +958,70 @@ console.log('\n[11] ?date= deep links (shareable scoreboard / replay-feed URLs)'
   feedDomLink.window.close();
 }
 
-console.log('\n[12] reference-parity fixes (session 6e2a58d9: G-2…G-5, G-9)');
+console.log('\n[12] af75fbfd parity & provenance checks (ABS counters, no before-score inference, zero-index merge, calendar dates)');
+{
+  const feedDom2 = await boot('reviews.html', { query: '?date=2026-09-15', beforeParse(w) { w.localStorage.clear(); } });
+  await new Promise((r) => setTimeout(r, 700));
+  const doc2 = feedDom2.window.document;
+
+  await check('AF-1 + AF-5: ABS rows show official ABS challenges left + challenger role + both-teams hover summary', () => {
+    feedDom2.window.ReplayFeed.setFilter('abs');
+    const html = text(doc2.getElementById('feed-list'));
+    assert(/2 ABS challenges left now/.test(html), 'official ABS counter missing on ABS row: ' + html);
+    assert(/\(batter\)/.test(html), 'official ABS challenger role missing: ' + html);
+    const noteEl = doc2.querySelector('#feed-list .counter-note');
+    assert(noteEl && /Challenges left: SEA 0 MGR · 2 ABS — MIN 1 MGR · 2 ABS/.test(noteEl.getAttribute('title') || ''),
+      'both-teams counter summary missing on title: ' + (noteEl && noteEl.getAttribute('title')));
+    feedDom2.window.ReplayFeed.setFilter('all');
+  });
+
+  await check('AF-2: nested {manager, abs} counter regression is detected', () => {
+    const notes = feedDom2.window.Reviews.counterRegression(
+      { manager: { away: { used: 1, remaining: 1 } }, abs: { home: { usedSuccessful: 2, remaining: 2 } } },
+      { manager: { away: { used: 0, remaining: 1 } }, abs: { home: { usedSuccessful: 1, remaining: 2 } } }
+    );
+    assert(Array.isArray(notes) && notes.length === 2, 'expected 2 nested regression notes, got ' + JSON.stringify(notes));
+  });
+
+  await check('AF-3: resolved review opened after the ruling never infers Before score', () => {
+    const mdEntry = feedDom2.window.ReplayFeed.state.entries.find((e) => e.review && e.review.code === 'MD');
+    assert(mdEntry && mdEntry.scoreTracker, 'MD entry missing');
+    assert(mdEntry.scoreTracker.before === null, 'before score must stay null when not observed live, got ' + JSON.stringify(mdEntry.scoreTracker.before));
+    assert(mdEntry.scoreTracker.actual && mdEntry.scoreTracker.actual.away === 3, 'actual score after missing');
+  });
+
+  await check('AF-4: active review with runs at risk renders persistent #banner on reviews.html', () => {
+    feedDom2.window.ReplayFeed.state.entries.push({
+      id: '823109:99:p:MA',
+      kind: 'review',
+      gamePk: 823109,
+      matchupLabel: 'SEA @ MIN',
+      lastSeen: Date.now(),
+      review: { code: 'MA', typeLabel: 'Manager Challenge', reason: 'Tag play', inningLabel: 'Bot 9', inProgress: true, runsAtRiskCount: 2, isABS: false, family: 'manager' },
+      scoreTracker: { before: { away: 3, home: 5 }, possible: { away: 3, home: 3 }, actual: null },
+    });
+    feedDom2.window.ReplayFeed.setFilter('all');
+    const bannerHtml = text(doc2.getElementById('banner'));
+    assert(/2 runs at risk/.test(bannerHtml), 'persistent #banner missing runs-at-risk alert: ' + bannerHtml);
+  });
+
+  await check('AF-5 + AF-6: strict calendar isValidISODate, non-zero-filled countDots, and atBatIndex 0 merge keys', () => {
+    assert(feedDom2.window.MLB.isValidISODate('2026-02-28') === true, '2026-02-28 should be valid');
+    assert(feedDom2.window.MLB.isValidISODate('2026-02-31') === false, '2026-02-31 must be rejected');
+    const absentDots = feedDom2.window.UI.countDots(null, undefined);
+    assert(!/on-ball|dot/.test(absentDots), 'absent count must not render zero-filled dots: ' + absentDots);
+    const mergedZero = feedDom2.window.FeedLog.mergePayloads(
+      { v: 1, date: '2026-09-15', entries: [{ gamePk: 1, review: { atBatIndex: 0, outcome: 'Stands' } }] },
+      { v: 1, date: '2026-09-15', entries: [{ gamePk: 1, review: { atBatIndex: '' , outcome: 'Unknown' } }] },
+      '2026-09-15'
+    );
+    assert(mergedZero.entries.length === 2, 'atBatIndex 0 must not collide with empty string: ' + mergedZero.entries.length);
+  });
+
+  feedDom2.window.close();
+}
+
+console.log('\n[13] reference-parity fixes (session 6e2a58d9: G-2…G-5, G-9)');
 {
   const dom = await boot('reviews.html', { beforeParse(w) { w.localStorage.clear(); } });
   await new Promise((r) => setTimeout(r, 900));

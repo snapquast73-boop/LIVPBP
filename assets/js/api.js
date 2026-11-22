@@ -200,18 +200,49 @@
     });
   }
 
-  /* Full live feed (v1.1 first, v1 as the documented fallback). `opts.fields`
-   * requests a StatsAPI `fields` projection (verified 2026-11-22:
-   * /api/v1.1/game/824960/feed/live?fields=gameData,absChallenges,… returns
-   * exactly gameData.review + gameData.absChallenges counter nodes). */
+  /* Full live feed (v1.1 first, v1 fallback, then /playByPlay + /boxscore + /linescore bundle). */
   function gameFeed(gamePk, opts) {
     opts = opts || {};
-    var qs = opts.fields ? '?fields=' + encodeURIComponent(opts.fields) : '';
-    var url = API_ROOT + '/v1.1/game/' + gamePk + '/feed/live' + qs;
+    var url = API_ROOT + '/v1.1/game/' + gamePk + '/feed/live';
+    if (opts.fields) url += '?fields=' + encodeURIComponent(opts.fields);
     return getJSON(url, { signal: opts.signal, retries: opts.retries })
       .catch(function (err) {
         if (err && err.status === 404) {
-          return getJSON(API_ROOT + '/v1/game/' + gamePk + '/feed/live' + qs, { signal: opts.signal });
+          var v1Url = API_ROOT + '/v1/game/' + gamePk + '/feed/live';
+          if (opts.fields) v1Url += '?fields=' + encodeURIComponent(opts.fields);
+          return getJSON(v1Url, { signal: opts.signal }).catch(function (err2) {
+            if (err2 && err2.status === 404 && !opts.fields) {
+              return Promise.all([
+                playByPlay(gamePk, { signal: opts.signal }),
+                boxscore(gamePk, { signal: opts.signal }),
+                linescore(gamePk, { signal: opts.signal }),
+              ]).then(function (parts) {
+                var pbp = parts[0] || {};
+                var box = parts[1] || {};
+                var ls = parts[2] || {};
+                var awayTeam = (box.teams && box.teams.away && box.teams.away.team) || {};
+                var homeTeam = (box.teams && box.teams.home && box.teams.home.team) || {};
+                return {
+                  gamePk: Number(gamePk),
+                  gameData: {
+                    game: { pk: Number(gamePk) },
+                    status: { abstractGameState: ls.isFinal ? 'Final' : 'Live', detailedState: ls.isFinal ? 'Final' : '' },
+                    teams: { away: awayTeam, home: homeTeam },
+                    players: {},
+                    venue: {},
+                    datetime: {},
+                  },
+                  liveData: {
+                    plays: { allPlays: pbp.allPlays || [], currentPlay: pbp.currentPlay || null },
+                    linescore: ls,
+                    boxscore: box,
+                    decisions: {},
+                  },
+                };
+              });
+            }
+            throw err2;
+          });
         }
         throw err;
       });
@@ -299,7 +330,17 @@
     return toISODate(d);
   }
 
-  function isValidISODate(s) { return /^\d{4}-\d{2}-\d{2}$/.test(String(s || '')); }
+  function isValidISODate(s) {
+    var str = String(s || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(str)) return false;
+    var p = str.split('-');
+    var y = Number(p[0]);
+    var m = Number(p[1]);
+    var day = Number(p[2]);
+    if (m < 1 || m > 12 || day < 1 || day > 31) return false;
+    var d = new Date(Date.UTC(y, m - 1, day));
+    return d.getUTCFullYear() === y && (d.getUTCMonth() + 1) === m && d.getUTCDate() === day;
+  }
 
   function formatDateLabel(dateStr) {
     if (!isValidISODate(dateStr)) return '';
