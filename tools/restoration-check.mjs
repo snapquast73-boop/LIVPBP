@@ -70,6 +70,16 @@ try {
     const res = await req('GET', p);
     ok(res.status === 200 && res.body.length > 0, `server: GET ${p} -> 200`);
   }
+  const dotRes = await req('GET', '/.git/HEAD');
+  ok(dotRes.status === 403, 'server: GET /.git/HEAD -> 403');
+  const zeroMergeA = await req('POST', '/api/feed-log', JSON.stringify({
+    v: 1, date: '2024-06-01', entries: [{ gamePk: 824638, kind: 'review', review: { atBatIndex: 0, outcome: 'Stands' } }],
+  }));
+  const zeroMergeB = await req('POST', '/api/feed-log', JSON.stringify({
+    v: 1, date: '2024-06-01', entries: [{ gamePk: 824638, kind: 'review', review: { atBatIndex: '', outcome: 'Unknown' } }],
+  }));
+  ok(zeroMergeA.status === 200 && zeroMergeB.status === 200 && JSON.parse(zeroMergeB.body).entriesCount === 2,
+    'server: POST /api/feed-log preserves atBatIndex 0 distinct from empty');
   // clean up the test artifact the POST wrote
   fs.rmSync(path.join(ROOT, 'data', 'feed-log-2024-06-01.json'), { force: true });
   fs.rmSync(path.join(ROOT, 'data', 'feed-log-index.json'), { force: true });

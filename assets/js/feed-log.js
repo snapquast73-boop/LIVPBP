@@ -80,9 +80,12 @@
 
   function entryKey(entry) {
     if (!entry) return null;
-    if (entry.id) return String(entry.id);
+    if (entry.id !== undefined && entry.id !== null && entry.id !== '') return String(entry.id);
     if (entry.review && entry.gamePk !== undefined) {
-      return entry.gamePk + ':' + (entry.review.id || entry.review.atBatIndex || '');
+      var rid = entry.review.id !== undefined && entry.review.id !== null && entry.review.id !== ''
+        ? entry.review.id
+        : (entry.review.atBatIndex !== undefined && entry.review.atBatIndex !== null ? entry.review.atBatIndex : '');
+      return entry.gamePk + ':' + rid;
     }
     return null;
   }
@@ -191,7 +194,18 @@
       });
   }
 
+  function isStaticHost() {
+    var host = (global.location && global.location.hostname) || '';
+    return /\.github\.io$/i.test(host);
+  }
+
   function loadServer(date) {
+    if (isStaticHost()) {
+      apiState.checked = true;
+      apiState.available = false;
+      return Promise.resolve(null);
+    }
+    if (apiState.checked && !apiState.available) return Promise.resolve(null);
     return serverFetch('/api/feed-log?date=' + encodeURIComponent(date))
       .then(function (data) {
         apiState.checked = true;

@@ -617,3 +617,35 @@ same thing, and its PR #24 merged after PR #23. Nothing was lost and nothing was
   - [`/game.html?gamePk=824638`](https://snapquast73-boop.github.io/LIVPBP/game.html?gamePk=824638) → full header, linescore with per-row `feed/live` source links, PBP with ABS pitch challenge indicators, Box Score, Props & Matchup driver table with per-row official source links, and Reviews tab.
   - [`/flagged.html`](https://snapquast73-boop.github.io/LIVPBP/flagged.html) → sections 1–12 live, 88/88 rows carrying verified official `https://` source links and blank cells on unconfirmed values.
 
+---
+
+# Session `arena/af75fbfd-livpbp` — Line-by-Line Functional & Provenance Parity Pass (`2026-11-22`)
+
+- **Session ID:** `af75fbfd` (branch fixed by Arena to `arena/af75fbfd-livpbp`, branched from `main` @ [`59a7351`](https://github.com/snapquast73-boop/LIVPBP/commit/59a73511af5b90e41b678db3c5005502cee54dda), rebased onto [`1411fbc`](https://github.com/snapquast73-boop/LIVPBP/commit/1411fbc70905ad11263f0cadf8f99becd2d83cb7) preserving `d105b565` PR #23/#25/#26, `aa6c1d7b` PR #24/#27, and `ca40f7ec` PR #28/#29 verbatim).
+- **Stale-claim check (`2026-11-22T02:05Z`):** Inspected all remote branches and open PRs (`0` open PRs). Merged sessions `d105b565`, `aa6c1d7b`, and `ca40f7ec` preserved completely; all three `ca40f7ec` handoff items (`180d` winter offseason lookback, `isComplete`/`inProgress` lean review probe + `gamePk` passed into `Props.getForecast`, and `atBatIndex: 0` merge key) are incorporated in this branch.
+
+## Task Board (`arena/af75fbfd-livpbp`)
+
+| Task ID | Task Description | Status | Owning Session | File Scope | Official Source |
+| --- | --- | --- | --- | --- | --- |
+| `AF-1` | Line-by-line audit of HTML, JS, CSS, `server.mjs`, `README.md`, `docs/*.md`, `flagged.html`, and live reference sites (`LIVPBP2`, `POSTSSNALRT`) | `done` | `arena/af75fbfd-livpbp` | `COORDINATION.md` | [LIVPBP main `f22a84b`](https://github.com/snapquast73-boop/LIVPBP/commit/f22a84bfd424bad65a8962d84755d6a76ad5d2b6) · [MLB StatsAPI schedule](https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=2026-08-28&hydrate=probablePitcher,linescore,decisions,review) |
+| `AF-2` | Cross-page `?date=` navigation (`index.html` ↔ `reviews.html` ↔ `game.html`), offseason jump on `reviews.html`, leaf-projected `feed/live` ABS/MGR counter ingestion, `#banner` Runs at Risk, both-teams counter summary, ABS challenger role, counter-regression nesting fix, and removal of resolved-score `before` inference | `done` | `arena/af75fbfd-livpbp` | `assets/js/api.js`, `assets/js/ui.js`, `assets/js/reviews.js`, `assets/js/scoreboard.js`, `assets/js/game.js`, `assets/js/reviews-feed.js`, `assets/js/feed-log.js` | [MLB `feed/live` `824638`](https://statsapi.mlb.com/api/v1.1/game/824638/feed/live?fields=gameData,review,absChallenges,hasChallenges,away,home,used,remaining,usedSuccessful,usedFailed) · [MLB `playByPlay` `824960`](https://statsapi.mlb.com/api/v1/game/824960/playByPlay?fields=allPlays,about,atBatIndex,result,description,reviewDetails,reviewType,challengeTeamId) |
+| `AF-3` | `server.mjs` + `feed-log.js` `atBatIndex: 0` merge-key fix and dotfile/symlink static containment hardening | `done` | `arena/af75fbfd-livpbp` | `server.mjs`, `assets/js/feed-log.js` | [`server.mjs` on `main`](https://github.com/snapquast73-boop/LIVPBP/blob/main/server.mjs) |
+| `AF-4` | Per-row official `https://` source links on all Markdown/HTML tables (`README.md`, `docs/*.md`, `flagged.html`), flagged irregularities (`AF-1..AF-7`), regression tests (`52/52` smoke, `47/47` jsdom), PR merge, and live GitHub Pages verification | `in progress` | `arena/af75fbfd-livpbp` | `README.md`, `docs/verification-report.md`, `flagged.html`, `tools/smoke-test.mjs`, `tools/restoration-check.mjs`, `COORDINATION.md` | [GitHub Pages API](https://api.github.com/repos/snapquast73-boop/LIVPBP/pages) |
+
+## Verification & Provenance Log (`arena/af75fbfd-livpbp`)
+
+- **Official sources fetched & cross-checked line by line (`2026-11-22`):**
+  - [`/api/v1.1/game/824638/feed/live?fields=gameData,review,absChallenges,…`](https://statsapi.mlb.com/api/v1.1/game/824638/feed/live?fields=gameData,review,absChallenges,hasChallenges,away,home,used,remaining,usedSuccessful,usedFailed) & [`/api/v1.1/game/849799/feed/live?fields=…`](https://statsapi.mlb.com/api/v1.1/game/849799/feed/live?fields=gameData,review,absChallenges,hasChallenges,away,home,used,remaining,usedSuccessful,usedFailed) — verified `gameData.absChallenges` exists on `feed/live` (not `playByPlay`), confirming why `reviews-feed.js` previously failed to render ABS counters (`AF-1`).
+  - [`/api/v1/game/824960/playByPlay`](https://statsapi.mlb.com/api/v1/game/824960/playByPlay?fields=allPlays,about,atBatIndex,inning,halfInning,result,description,playEvents,index,details,reviewDetails,isOverturned,inProgress,reviewType,challengeTeamId) — verified ABS challenger role wording (`"Jonah Heim challenged (pitch result)…"` on `atBatIndex: 34`, `AF-5`) and flagged `atBatIndex: 80` where pitch-level `reviewDetails` is present without challenge prose in `result.description` (`AF-7`).
+  - [`/api/v1/game/775296/linescore`](https://statsapi.mlb.com/api/v1/game/775296/linescore) vs [`/api/v1.1/game/775296/feed/live`](https://statsapi.mlb.com/api/v1.1/game/775296/feed/live?fields=gamePk,liveData,linescore,teams,away,home,runs,hits,errors) — re-confirmed upstream error-count discrepancy (`2` vs `3`).
+  - [`/api/v1/schedule?sportId=1&startDate=2026-10-01&endDate=2026-11-22`](https://statsapi.mlb.com/api/v1/schedule?sportId=1&startDate=2026-10-01&endDate=2026-11-22&fields=dates,date,totalGames) — confirmed latest 2026 postseason game date `2026-10-28` (`totalGames: 1`, game `849799`).
+  - Reference deployments [`LIVPBP2/reviews.html?date=2026-08-28`](https://snapquast73-boop.github.io/LIVPBP2/reviews.html?date=2026-08-28) and [`POSTSSNALRT/reviews.html`](https://snapquast73-boop.github.io/POSTSSNALRT/reviews.html) — verified full parity on `?date=` deep links, cross-page date navigation, MGR/ABS challenge counters, both-teams summaries, `#banner` Runs at Risk alerts, and offseason date jump.
+- **Test & Link Suites Executed:**
+  - `npm test` (`tools/smoke-test.mjs`): **52 passed, 0 failed** (+5 new `AF-1..AF-6` checks in §[12]).
+  - `node tools/restoration-check.mjs`: **ALL CHECKS PASSED** (including `GET /.git/HEAD -> 403` and `atBatIndex: 0` merge preservation).
+  - `node tests/run-all.mjs`: **syntax OK · 40 local references OK · 8 DOM bindings OK · 47/47 jsdom render checks OK**.
+  - `node tests/props-provenance-test.mjs`: **5 passed, 0 failed** (with `game.js` passing `gamePk` into `Props.getForecast`).
+  - Table-row provenance check: **102/102 Markdown data rows** (`README.md`, `docs/*.md`, `audit/*.md`, `tests/README.md`) + **95/95 `flagged.html` data rows** carry clickable `https://` official source links, with blank cells on all unconfirmed items.
+
+

@@ -180,20 +180,20 @@ sends CORS headers, so any static page can call it directly from the browser.
 
 This project does the same thing with its own front end. The API calls we make:
 
-| What we need | Endpoint |
-| --- | --- |
-| Games for a date (scoreboard cards, probables, live count) | `GET /api/v1/schedule?sportId=1&date=YYYY-MM-DD&hydrate=probablePitcher,linescore,decisions,review` |
-| **Review status for the whole slate** (Replay Feed's 250ms watcher) | `GET /api/v1/schedule?sportId=1&date=YYYY-MM-DD&fields=dates,games,gamePk,season,status,abstractGameState,codedGameState,detailedState,statusCode,reason,startTimeTBD,abstractGameCode` |
-| **Review status for one game** (game page's 250ms status watcher, ~150 B) | `GET /api/v1.1/game/{gamePk}/feed/live?fields=gameData,status,abstractGameState,codedGameState,detailedState,statusCode,reason,startTimeTBD,abstractGameCode` |
-| Official game-status registry (source of every review `statusCode` + `reason`) | `GET /api/v1/gameStatus` |
-| Full game state — play-by-play, current at-bat, linescore, box score, decisions, rosters | `GET /api/v1.1/game/{gamePk}/feed/live` |
-| Fallback feed (older games) | `GET /api/v1/game/{gamePk}/feed/live` |
-| Fallback bundle (if the feed 404s) | `GET /api/v1/game/{gamePk}/playByPlay` + `/boxscore` + `/linescore` |
-| Play-by-play only (all-games Replay Feed scans this per game) | `GET /api/v1/game/{gamePk}/playByPlay` |
-| Team logos | `https://www.mlbstatic.com/team-logos/team-cap-on-dark/{teamId}.svg` |
-| Player headshots | `https://img.mlbstatic.com/mlb-photos/image/upload/.../v1/people/{playerId}/headshot/67/current` |
-| Batter / pitcher season inputs for the forecast | `GET /api/v1/people/{playerId}/stats?stats=expectedStatistics,season,statSplits,gameLog&group=hitting&sitCodes=vl,vr&season=YYYY` (same CSV for `group=pitching`). **Note:** the `statcast` stat is rejected with HTTP 400 for `group=hitting` on the live API (verified 2026-08-19), so it is deliberately not requested — xBA comes from `expectedStatistics`. |
-| Career head-to-head for the live forecast | `GET /api/v1/people/{batterId}/stats?stats=vsPlayer&group=hitting&opposingPlayerId={pitcherId}` |
+| What we need | Endpoint | Official source |
+| --- | --- | --- |
+| Games for a date (scoreboard cards, probables, live count) | `GET /api/v1/schedule?sportId=1&date=YYYY-MM-DD&hydrate=probablePitcher,linescore,decisions,review` | [schedule (2026-10-28)](https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=2026-10-28&hydrate=probablePitcher,linescore,decisions,review) |
+| **Review status for the whole slate** (Replay Feed's 250ms watcher) | `GET /api/v1/schedule?sportId=1&date=YYYY-MM-DD&fields=dates,games,gamePk,season,status,abstractGameState,codedGameState,detailedState,statusCode,reason,startTimeTBD,abstractGameCode` | [slate status projection](https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=2026-10-28&fields=dates,games,gamePk,season,status,abstractGameState,codedGameState,detailedState,statusCode,reason,startTimeTBD,abstractGameCode) |
+| **Review status for one game** (game page's 250ms status watcher, ~150 B) | `GET /api/v1.1/game/{gamePk}/feed/live?fields=gameData,status,abstractGameState,codedGameState,detailedState,statusCode,reason,startTimeTBD,abstractGameCode` | [game status projection](https://statsapi.mlb.com/api/v1.1/game/849799/feed/live?fields=gameData,status,abstractGameState,codedGameState,detailedState,statusCode,reason,startTimeTBD,abstractGameCode) |
+| Official game-status registry (source of every review `statusCode` + `reason`) | `GET /api/v1/gameStatus` | [gameStatus registry](https://statsapi.mlb.com/api/v1/gameStatus) |
+| Full game state — play-by-play, current at-bat, linescore, box score, decisions, rosters | `GET /api/v1.1/game/{gamePk}/feed/live` | [feed/live v1.1](https://statsapi.mlb.com/api/v1.1/game/849799/feed/live) |
+| Fallback feed (older games) | `GET /api/v1/game/{gamePk}/feed/live` | [feed/live v1](https://statsapi.mlb.com/api/v1/game/744932/feed/live) |
+| Fallback bundle (if the feed 404s) | `GET /api/v1/game/{gamePk}/playByPlay` + `/boxscore` + `/linescore` | [playByPlay](https://statsapi.mlb.com/api/v1/game/849799/playByPlay) · [boxscore](https://statsapi.mlb.com/api/v1/game/849799/boxscore) · [linescore](https://statsapi.mlb.com/api/v1/game/849799/linescore) |
+| Play-by-play + official MGR/ABS challenge counters (all-games Replay Feed scans per game) | `GET /api/v1/game/{gamePk}/playByPlay` + leaf-projected `GET /api/v1.1/game/{gamePk}/feed/live?fields=gameData,review,absChallenges,…` | [playByPlay](https://statsapi.mlb.com/api/v1/game/824638/playByPlay) · [absChallenges](https://statsapi.mlb.com/api/v1.1/game/824638/feed/live?fields=gameData,review,absChallenges,hasChallenges,away,home,used,remaining,usedSuccessful,usedFailed) |
+| Team logos | `https://www.mlbstatic.com/team-logos/team-cap-on-dark/{teamId}.svg` | [team logo 119](https://www.mlbstatic.com/team-logos/team-cap-on-dark/119.svg) |
+| Player headshots | `https://img.mlbstatic.com/mlb-photos/image/upload/.../v1/people/{playerId}/headshot/67/current` | [headshot 660271](https://img.mlbstatic.com/mlb-photos/image/upload/v1/people/660271/headshot/67/current) |
+| Batter / pitcher season inputs for the forecast | `GET /api/v1/people/{playerId}/stats?stats=expectedStatistics,season,statSplits,gameLog&group=hitting&sitCodes=vl,vr&season=YYYY` (same CSV for `group=pitching`). **Note:** the `statcast` stat is rejected with HTTP 400 for `group=hitting` on the live API (verified 2026-08-19), so it is deliberately not requested — xBA comes from `expectedStatistics`. | [people/660271/stats](https://statsapi.mlb.com/api/v1/people/660271/stats?stats=expectedStatistics,season,statSplits,gameLog&group=hitting&sitCodes=vl,vr&season=2026) |
+| Career head-to-head for the live forecast | `GET /api/v1/people/{batterId}/stats?stats=vsPlayer&group=hitting&opposingPlayerId={pitcherId}` | [vsPlayer H2H](https://statsapi.mlb.com/api/v1/people/694192/stats?stats=vsPlayer&group=hitting&opposingPlayerId=656876) |
 
 The live feed is the heart of it — one response contains everything Gameday shows:
 

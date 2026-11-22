@@ -59,6 +59,22 @@
     return /^\d+$/.test(String(pk || '')) ? pk : null;
   }
 
+  function parseGameDate() {
+    try {
+      var params = new URLSearchParams(global.location.search || '');
+      var d = params.get('date');
+      return MLB.isValidISODate(d) ? d : null;
+    } catch (e) { return null; }
+  }
+
+  function syncNavLinks(dateStr) {
+    if (!MLB.isValidISODate(dateStr)) return;
+    var backLink = document.querySelector('a.btn[href^="index.html"]');
+    if (backLink) backLink.setAttribute('href', 'index.html?date=' + encodeURIComponent(dateStr));
+    var feedLink = document.querySelector('a.btn-feed[href^="reviews.html"]');
+    if (feedLink) feedLink.setAttribute('href', 'reviews.html?date=' + encodeURIComponent(dateStr));
+  }
+
   function setLoading(on) {
     var el = $('loading');
     if (!el) return;
@@ -264,9 +280,13 @@
     var batter = matchup.batter || {};
     var pitcher = matchup.pitcher || {};
     var count = (play && play.count) || { balls: ls.balls, strikes: ls.strikes, outs: ls.outs };
-    var balls = Number(count.balls || 0);
-    var strikes = Number(count.strikes || 0);
-    var outs = Number(typeof count.outs === 'number' ? count.outs : ls.outs) || 0;
+    var balls = typeof count.balls === 'number' && isFinite(count.balls) ? count.balls : null;
+    var strikes = typeof count.strikes === 'number' && isFinite(count.strikes) ? count.strikes : null;
+    var rawOuts = typeof count.outs === 'number' ? count.outs : ls.outs;
+    var outs = typeof rawOuts === 'number' && isFinite(rawOuts) ? rawOuts : null;
+    var pitchCountInPA = (play && Array.isArray(play.playEvents))
+      ? play.playEvents.filter(function (ev) { return !!(ev && ev.isPitch === true); }).length
+      : null;
     var offense = ls.offense || {};
     var occupied = {
       first: !!(offense.first && offense.first.id),
@@ -300,7 +320,7 @@
     var pitcherCard = '<div class="live-card"><h4>On the mound</h4>' +
       '<div class="player-line"><b>' + UI.esc(pitcher.fullName || '—') + '</b></div>' +
       '<dl class="kv" style="margin-top:8px">' +
-        '<dt>Pitches</dt><dd>' + (play && play.playEvents ? play.playEvents.length : '—') + '</dd>' +
+        '<dt>Pitches (PA)</dt><dd>' + (pitchCountInPA !== null ? pitchCountInPA : '—') + '</dd>' +
         (pitcherSeason && pitcherSeason.inningsPitched !== undefined
           ? '<dt>IP</dt><dd>' + UI.esc(pitcherSeason.inningsPitched) + '</dd>' : '') +
         (pitcherSeason && pitcherSeason.era !== undefined
@@ -352,6 +372,7 @@
     });
 
     Props.getForecast({
+      gamePk: state.gamePk,
       batterId: matchup.batter.id,
       batterName: matchup.batter.fullName,
       batterHand: matchup.batSide && matchup.batSide.code,
@@ -463,18 +484,26 @@
 
       var pitches = '';
       if (Array.isArray(play.playEvents) && play.playEvents.length) {
-        var items = play.playEvents.filter(function (ev) { return ev && ev.details; }).map(function (ev) {
+        var seenPitches = 0;
+        var items = play.playEvents.map(function (ev) {
+          if (!ev) return '';
+          var derivedPitchNum = '';
+          if (ev.isPitch === true) {
+            seenPitches += 1;
+            derivedPitchNum = seenPitches;
+          }
+          if (!ev.details) return '';
           var d = ev.details;
           var call = (d.call && d.call.description) || d.description || '';
           var velo = ev.pitchData && ev.pitchData.startSpeed ? ev.pitchData.startSpeed + ' mph' : '';
           var type = d.type && d.type.description ? d.type.description : '';
           var reviewMark = ev.reviewDetails ? ' 🚨' : '';
-          var pNum = typeof ev.pitchNumber === 'number' ? ev.pitchNumber : (ev.isPitch && ev.index !== undefined ? ev.index + 1 : '');
+          var pNum = typeof ev.pitchNumber === 'number' ? ev.pitchNumber : derivedPitchNum;
           return '<li><span class="p-num">' + pNum + '</span>' +
             '<span class="p-call">' + UI.esc(call) + reviewMark + '</span>' +
             '<span>' + UI.esc(type) + '</span>' +
             '<span class="p-velo">' + UI.esc(velo) + '</span></li>';
-        }).join('');
+        }).filter(Boolean).join('');
         if (items) pitches = '<ul class="pitches">' + items + '</ul>';
       }
 
@@ -614,7 +643,9 @@
         '<div class="review-head">' +
           '<span class="review-type">' + UI.esc(r.typeLabel) + (r.reason ? ': ' + UI.esc(r.reason) : '') + '</span>' +
           '<span>' + UI.esc(r.inningLabel) + '</span>' +
-          (r.challengerSide !== 'unknown' ? '<span>Challenged by ' + UI.esc(r.challenger) + '</span>' : '') +
+          (r.challengerSide !== 'unknown'
+            ? '<span>Challenged by ' + UI.esc(r.challenger) + (r.challengerRole ? ' (' + UI.esc(r.challengerRole) + ')' : '') + '</span>'
+            : '') +
           '<span>' + UI.esc(r.outcome) + '</span>' +
           '<a href="https://statsapi.mlb.com/api/v1/game/' + encodeURIComponent(state.gamePk) + '/playByPlay" target="_blank" rel="noopener" title="Official MLB StatsAPI play-by-play source">MLB API ↗</a>' +
         '</div>' +
@@ -764,10 +795,15 @@
     /* While a review is in flight, probe the lean play-by-play endpoint first
      * and pull the full feed only when the review state flips. */
     var pre = state.inReview
-      ? MLB.playByPlay(state.gamePk, { fields: 'allPlays,about,atBatIndex,hasReview' })
+      ? MLB.playByPlay(state.gamePk, { fields: 'allPlays,about,atBatIndex,hasReview,isComplete,reviewDetails,inProgress,playEvents' })
         .then(function (lean) {
           var plays = (lean && lean.allPlays) || [];
-          var stillReview = plays.some(function (p) { return p && p.about && p.about.hasReview === true && p.about.isComplete === false; });
+          var stillReview = plays.some(function (p) {
+            if (!p) return false;
+            if (p.reviewDetails && p.reviewDetails.inProgress === true) return true;
+            if (Array.isArray(p.playEvents) && p.playEvents.some(function (ev) { return !!(ev && ev.reviewDetails && ev.reviewDetails.inProgress === true); })) return true;
+            return !!(p.about && p.about.hasReview === true && p.about.isComplete === false);
+          });
           if (!stillReview) state.inReview = false;
           return stillReview ? null : MLB.gameFeed(state.gamePk);
         })
@@ -887,16 +923,20 @@
     setTab('plays');
     setLoading(true);
 
+    var initialDate = parseGameDate() || MLB.todayISO();
+    syncNavLinks(initialDate);
+
     /* The scoring-change log is per date; use the game's official date when the
      * feed has one, today otherwise.  Re-read after the first feed arrives. */
-    FeedLog.load(MLB.todayISO()).then(function (log) {
+    FeedLog.load(initialDate).then(function (log) {
       state.log = log;
       applyScoringChangesFromLog();
       return refresh();
     }).then(function () {
       var officialDate = state.feed && state.feed.gameData && state.feed.gameData.datetime &&
         state.feed.gameData.datetime.officialDate;
-      if (officialDate && officialDate !== MLB.todayISO()) {
+      if (officialDate) syncNavLinks(officialDate);
+      if (officialDate && officialDate !== initialDate) {
         return FeedLog.load(officialDate).then(function (log) {
           state.log = log;
           applyScoringChangesFromLog();
