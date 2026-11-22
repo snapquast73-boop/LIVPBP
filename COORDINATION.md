@@ -445,3 +445,61 @@ Merge-conflict note (2026-11-20): rebasing onto `main` @ `9297edc` (PR #12, sess
 | `S1f-2` | Live-StatsAPI field fixes (`expectedStatistics.avg` xBA, `vsPlayerTotal` H2H, combined `!split.team` splits, `remainingPAs`, `boxscore.seasonStats`, `MF` fallback, `events[last].index`, PA-ending `MJ` counts) | `done` | `arena/1f908513-livpbp` | `assets/js/props.js`, `assets/js/game.js`, `assets/js/reviews.js` |
 | `S1f-3` | Replay-audit handoff (`RR-01` `dateSeq` guard, `RR-02` official `pitchNumber`, `RR-03` scoring changes in `All`, `RR-04` direct MLB API row links, `RR-06` smoke-test script readiness) | `done` | `arena/1f908513-livpbp` | `assets/js/reviews-feed.js`, `assets/js/reviews.js`, `assets/js/game.js`, `tools/smoke-test.mjs` |
 | `S1f-4` | Per-row official `https://` source links, blank unconfirmed value cells, and `L-1..L-4` + `RR-01..RR-06` tables on `flagged.html` & `docs/*.md` (`RR-05` flagged `needs review`) | `needs review` | `arena/1f908513-livpbp` | `flagged.html`, `docs/verification-report.md`, `docs/statsapi-field-map.md`, `COORDINATION.md` |
+
+---
+
+# Session `d105b565` — functional re-verification & deep links (2026-11-22)
+
+- **Session ID:** `d105b565` · **Branch (fixed by Arena):** `arena/d105b565-livpbp`, branched from `main` @ `59a7351` (merge of PR #22). The brief's `session-<id>/<task>` branch rule cannot be followed literally in this sandbox; logged as `F-001` by every previous session and unchanged here.
+- **Board state when this session started:** no open claims. `git status` clean, `main` == `59a7351`, working tree matched `origin/main` exactly. The task board's last entry (`1f908513`) was already merged and deployed, so this session claims the tasks below before writing to any file.
+
+## Claims
+
+| Task | Status | Owning session | File scope |
+|---|---|---|---|
+| D105-1 Re-verify every StatsAPI field the client reads against the live API (2026-11-22) | done | `d105b565` | `docs/verification-report.md`, `flagged.html` |
+| D105-2 `?date=YYYY-MM-DD` deep links + URL sync on the scoreboard and the replay feed | done | `d105b565` | `assets/js/scoreboard.js`, `assets/js/reviews-feed.js`, `tools/smoke-test.mjs` |
+| D105-3 Per-row source links must open the request the row is rendered from | done | `d105b565` | `assets/js/game.js` |
+| D105-4 Publish findings (D-1…D-4) on the Flagged for Review page | done | `d105b565` | `flagged.html`, `docs/verification-report.md` |
+| D105-5 Integration: PR → merge → confirm Pages deploy → record here | in progress | `d105b565` | `README.md`, `COORDINATION.md` |
+
+No file owned by another session was edited: every file above was last touched by `f7276bda`
+(`flagged.html`, `docs/verification-report.md`), `f132969c`/`1f908513`
+(`assets/js/*`, `tools/smoke-test.mjs`) — all of whose tasks are closed on `main`, so nothing was
+taken from an open claim.
+
+## What was verified (2026-11-22, live StatsAPI)
+
+| Check | Official source | Result |
+|---|---|---|
+| 30 club abbreviations vs `UI.TEAM_ABBR` | [`/api/v1/teams?sportId=1`](https://statsapi.mlb.com/api/v1/teams?sportId=1&fields=teams,id,name,abbreviation,teamName&season=2026) | all 30 match |
+| Review-code wording vs `FALLBACK_REASONS` (`MA…MV`, `NA…NW`, `MJ`, `NJ`, `MF`, `IH`) | [`/api/v1/gameStatus`](https://statsapi.mlb.com/api/v1/gameStatus) | matches; `MX`/`NX` have no `reason` and none is invented |
+| Hydrated schedule card shape | [`/api/v1/schedule?date=2026-10-28&hydrate=…`](https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=2026-10-28&hydrate=probablePitcher,linescore,decisions,review) | matches `scoreboard.js` reads |
+| xBA field (`stat.avg`, not `xba`) | [`people/660271/stats?stats=expectedStatistics`](https://statsapi.mlb.com/api/v1/people/660271/stats?stats=expectedStatistics&group=hitting&season=2026) | `".285"` in `stat.avg` |
+| H2H blocks `vsPlayerTotal` + `vsPlayer` | [`people/694192/stats?stats=vsPlayer`](https://statsapi.mlb.com/api/v1/people/694192/stats?stats=vsPlayer&group=hitting&opposingPlayerId=656876) | both present |
+| `boxscore…players.ID<id>.seasonStats` | [`game/849799/boxscore`](https://statsapi.mlb.com/api/v1/game/849799/boxscore) | present |
+| `os_ruling_pending_primary` / `_prior` | [`/api/v1/eventTypes`](https://statsapi.mlb.com/api/v1/eventTypes) | both, “Official Scorer Ruling Pending” |
+| ABS/manager counters for game 849799 vs the page's chips | [`feed/live gameData.absChallenges`](https://statsapi.mlb.com/api/v1.1/game/849799/feed/live?fields=gameData,absChallenges,hasChallenges,away,home,usedSuccessful,usedFailed,remaining,review,used) | `1 successful / 0 failed / 2 remaining` each side = the two overturned ABS chips printed |
+| Deployed game page vs official linescore (game 849799) | [`game/849799/linescore`](https://statsapi.mlb.com/api/v1/game/849799/linescore) · [deployed page](https://snapquast73-boop.github.io/LIVPBP/game.html?gamePk=849799) | identical (MIL 4-8-2, TB 1-4-0) |
+| Deployed scoreboard / replay feed / flagged page render | [site](https://snapquast73-boop.github.io/LIVPBP/) | all render; offseason slate handled |
+
+## Irregularities opened
+
+| # | Item | Status |
+|---|---|---|
+| D-1 | `/api/v1/game/775296/linescore` reports home `errors: 2`; `/api/v1.1/game/775296/feed/live` reports `3`. The page renders the feed value and does not "correct" it. | Flagged on `flagged.html` §12 — owner decision |
+| D-2 | Per-row source links pointed at `/linescore` / `/boxscore` instead of the request the rows are rendered from, so the link could show a different number than the row. | **Fixed** in `assets/js/game.js` |
+| D-3 | Original client source still 404 (`buffedlizard55-lab/MLB-Live-PBP`) — the client remains a reconstruction. | Unverified (source missing), §12 |
+| D-4 | Club hex palette / hit-model constants — no official value exists. | Unverified, carried from U-1/U-2 |
+
+## Checks
+
+```text
+npm ci && npm test               -> 47 passed, 0 failed   (+3 deep-link checks in §[11])
+node tests/run-all.mjs           -> syntax OK · 40 local refs OK · 8 bindings OK · 37/37 jsdom
+node tools/restoration-check.mjs -> ALL CHECKS PASSED
+```
+
+## Integration record
+
+- PR: _filled in below on completion._

@@ -634,6 +634,144 @@
       </tbody>
     </table>
 
+    <h2>11. Re-verification against the live StatsAPI (session <code>d105b565</code>, 2026-11-22)</h2>
+    <p style="color:var(--muted);font-size:13px">
+      Every row below was fetched on <strong>2026-11-22</strong> from the official
+      <code>statsapi.mlb.com</code> service, or read from the deployed Pages site, and the link opens the
+      exact request used. Where the official payload does not publish a value, the cell is left
+      <strong>blank</strong> and the row says so — nothing is inferred. No row here was copied from an
+      earlier session's notes without re-fetching it.
+    </p>
+    <table class="verify">
+      <thead>
+        <tr><th>#</th><th>Claim re-checked</th><th>Value read from the official response</th><th>Official source</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>R-1</td>
+          <td class="wrap">Every club abbreviation the UI prints (<code>UI.TEAM_ABBR</code>, 30 ids) is the official StatsAPI <code>abbreviation</code> field, not a guess.</td>
+          <td class="wrap">All 30 match, including <code>AZ</code> (109), <code>ATH</code> (133), <code>CWS</code> (145), <code>KC</code> (118), <code>SD</code> (135), <code>TB</code> (139), <code>WSH</code> (120).</td>
+          <td class="wrap"><a href="https://statsapi.mlb.com/api/v1/teams?sportId=1&amp;fields=teams,id,name,abbreviation,teamName&amp;season=2026" target="_blank" rel="noopener">teams?sportId=1</a></td>
+          <td class="status-ok">Verified</td>
+        </tr>
+        <tr>
+          <td>R-2</td>
+          <td class="wrap">The offline fallback reason table in <code>assets/js/reviews.js</code> (<code>FALLBACK_REASONS</code>) matches the API's own wording for every <code>M*</code>/<code>N*</code> code.</td>
+          <td class="wrap">Matches for <code>MA…MV</code>, <code>NA…NW</code>, <code>MJ</code>/<code>NJ</code> (“Pitch Result”), <code>MF</code> (“Close play at 1st”), <code>IH</code> (reason “Review”, detailedState “Instant Replay”). <code>MX</code>/<code>NX</code> publish <em>no</em> <code>reason</code> at all, and the code adds none.</td>
+          <td class="wrap"><a href="https://statsapi.mlb.com/api/v1/gameStatus" target="_blank" rel="noopener">gameStatus</a></td>
+          <td class="status-ok">Verified</td>
+        </tr>
+        <tr>
+          <td>R-3</td>
+          <td class="wrap">Scoreboard card fields (<code>teams.away/home.team.name</code>, <code>leagueRecord.wins/losses</code>, <code>score</code>, <code>probablePitcher.fullName</code>, <code>decisions.winner/loser/save</code>, <code>linescore.currentInning/inningState</code>, <code>venue.name</code>, <code>seriesGameNumber</code>/<code>gamesInSeries</code>) with <code>hydrate=probablePitcher,linescore,decisions,review</code>.</td>
+          <td class="wrap">Present as read, e.g. game 849799: MIL 4 / TB 1, <code>leagueRecord</code> 4-1 and 1-4, W <code>Jacob Misiorowski</code>, L <code>Drew Rasmussen</code>, Tropicana Field, game 5 of 7.</td>
+          <td class="wrap"><a href="https://statsapi.mlb.com/api/v1/schedule?sportId=1&amp;date=2026-10-28&amp;hydrate=probablePitcher,linescore,decisions,review" target="_blank" rel="noopener">schedule 2026-10-28 (hydrated)</a></td>
+          <td class="status-ok">Verified</td>
+        </tr>
+        <tr>
+          <td>R-4</td>
+          <td class="wrap">Expected batting average really lives in <code>expectedStatistics.splits[].stat.avg</code> (the field <code>props.js</code> normalizes).</td>
+          <td class="wrap"><code>{"avg":".285","slg":".549","woba":".393"}</code> for player 660271, 2026 — no <code>xba</code> key in the response.</td>
+          <td class="wrap"><a href="https://statsapi.mlb.com/api/v1/people/660271/stats?stats=expectedStatistics&amp;group=hitting&amp;season=2026" target="_blank" rel="noopener">people/660271/stats (expectedStatistics)</a></td>
+          <td class="status-ok">Verified</td>
+        </tr>
+        <tr>
+          <td>R-5</td>
+          <td class="wrap">Head-to-head history is published as <code>vsPlayerTotal</code> (career) plus <code>vsPlayer</code> (per season) — both are read.</td>
+          <td class="wrap">Chourio vs Rasmussen: <code>vsPlayerTotal</code> 0-for-3, <code>vsPlayer</code> season 2025 0-for-3.</td>
+          <td class="wrap"><a href="https://statsapi.mlb.com/api/v1/people/694192/stats?stats=vsPlayer&amp;group=hitting&amp;opposingPlayerId=656876" target="_blank" rel="noopener">people/694192/stats (vsPlayer)</a></td>
+          <td class="status-ok">Verified</td>
+        </tr>
+        <tr>
+          <td>R-6</td>
+          <td class="wrap">Per-player season lines are at <code>boxscore.teams.&lt;side&gt;.players.ID&lt;id&gt;.seasonStats.{batting,pitching}</code>, the path <code>seasonLine()</code> falls back to.</td>
+          <td class="wrap">e.g. <code>ID806198.seasonStats.batting = {hits:17, avg:".354", atBats:48}</code>.</td>
+          <td class="wrap"><a href="https://statsapi.mlb.com/api/v1/game/849799/boxscore" target="_blank" rel="noopener">game/849799/boxscore</a></td>
+          <td class="status-ok">Verified</td>
+        </tr>
+        <tr>
+          <td>R-7</td>
+          <td class="wrap">“Official Scorer Ruling Pending” is still an official event type, for both codes the feed watches.</td>
+          <td class="wrap"><code>os_ruling_pending_primary</code> and <code>os_ruling_pending_prior</code>, description “Official Scorer Ruling Pending”.</td>
+          <td class="wrap"><a href="https://statsapi.mlb.com/api/v1/eventTypes" target="_blank" rel="noopener">eventTypes</a></td>
+          <td class="status-ok">Verified</td>
+        </tr>
+        <tr>
+          <td>R-8</td>
+          <td class="wrap">ABS challenge chips on the game page come from official counters, not from counting feed events.</td>
+          <td class="wrap">Game 849799: <code>absChallenges.away/home = {usedSuccessful:1, usedFailed:0, remaining:2}</code> — i.e. exactly the two overturned ABS challenges the page printed; manager counters <code>used 0 / remaining 2</code>.</td>
+          <td class="wrap"><a href="https://statsapi.mlb.com/api/v1.1/game/849799/feed/live?fields=gameData,absChallenges,hasChallenges,away,home,usedSuccessful,usedFailed,remaining,review,used" target="_blank" rel="noopener">feed/live gameData.absChallenges</a></td>
+          <td class="status-ok">Verified</td>
+        </tr>
+        <tr>
+          <td>R-9</td>
+          <td class="wrap">The deployed game page prints the linescore exactly as the official payload does (end-to-end check of the live site, not a fixture).</td>
+          <td class="wrap">Game 849799 rendered MIL <code>0 1 0 0 1 2 0 0 0 · 4 8 2</code>, TB <code>0 0 0 0 0 0 0 0 1 · 1 4 0</code> — identical to the official response.</td>
+          <td class="wrap"><a href="https://statsapi.mlb.com/api/v1/game/849799/linescore" target="_blank" rel="noopener">game/849799/linescore</a> · <a href="https://snapquast73-boop.github.io/LIVPBP/game.html?gamePk=849799" target="_blank" rel="noopener">deployed game page</a></td>
+          <td class="status-ok">Verified</td>
+        </tr>
+        <tr>
+          <td>R-10</td>
+          <td class="wrap">The deployed scoreboard, replay feed and flagged page all execute and render live data (offseason slate on the audit date).</td>
+          <td class="wrap">Scoreboard: “No games scheduled… Most recent date with games: Wed Oct 28, 2026”. Replay feed: 8 summary tiles + scan line. This page: rendered.</td>
+          <td class="wrap"><a href="https://snapquast73-boop.github.io/LIVPBP/" target="_blank" rel="noopener">deployed /</a> · <a href="https://snapquast73-boop.github.io/LIVPBP/reviews.html" target="_blank" rel="noopener">reviews.html</a></td>
+          <td class="status-ok">Verified</td>
+        </tr>
+        <tr>
+          <td>R-11</td>
+          <td class="wrap">Date views can be opened from a link (<code>?date=YYYY-MM-DD</code> on the scoreboard and the replay feed), so a past slate is reachable during the offseason.</td>
+          <td class="wrap">Added this pass; the address bar follows the selected date. Covered by <code>tools/smoke-test.mjs</code> section [11] (3 checks).</td>
+          <td class="wrap"><a href="https://github.com/snapquast73-boop/LIVPBP/blob/main/tools/smoke-test.mjs" target="_blank" rel="noopener">tools/smoke-test.mjs</a></td>
+          <td class="status-ok">Verified</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2>12. Irregularities found in this pass</h2>
+    <table class="verify">
+      <thead>
+        <tr><th>#</th><th>Irregularity</th><th>What the official sources say</th><th>What the site does</th><th>Official source</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>D-1</td>
+          <td class="wrap">Two official StatsAPI endpoints publish <strong>different error totals for the same team in the same game</strong>.</td>
+          <td class="wrap">Game 775296 (2024 World Series Game 5): <code>/api/v1/game/775296/linescore</code> reports home <code>errors: 2</code>; <code>/api/v1.1/game/775296/feed/live</code> reports <code>liveData.linescore.teams.home.errors: 3</code>. Re-fetched 2026-11-22; the disagreement is still there.</td>
+          <td class="wrap">The page renders from <code>feed/live</code> (one request feeds the whole page), so it shows 3. Not “corrected”, not averaged, not guessed — flagged here for your decision.</td>
+          <td class="wrap"><a href="https://statsapi.mlb.com/api/v1/game/775296/linescore" target="_blank" rel="noopener">/linescore</a> · <a href="https://statsapi.mlb.com/api/v1.1/game/775296/feed/live" target="_blank" rel="noopener">/feed/live</a></td>
+          <td class="status-flag">Flagged — your call</td>
+        </tr>
+        <tr>
+          <td>D-2</td>
+          <td class="wrap">Each linescore / box-score row's “source” link pointed at <code>/linescore</code> and <code>/boxscore</code>, while the row's numbers are read from <code>feed/live</code> — so for a game like 775296 the link opened a <em>different</em> value than the row showed.</td>
+          <td class="wrap">As D-1.</td>
+          <td class="wrap"><strong>Fixed:</strong> the per-row link now opens the exact request the row is rendered from (<code>/api/v1.1/game/&lt;pk&gt;/feed/live</code>, <code>liveData.linescore</code> / <code>liveData.boxscore</code>).</td>
+          <td class="wrap"><a href="https://github.com/snapquast73-boop/LIVPBP/blob/main/assets/js/game.js" target="_blank" rel="noopener">assets/js/game.js</a></td>
+          <td class="status-ok">Fixed</td>
+        </tr>
+        <tr>
+          <td>D-3</td>
+          <td class="wrap">The uploaded repository never contained the front-end assets; the original upstream is still unreachable, so this client remains a reconstruction.</td>
+          <td class="wrap">GitHub API for <code>buffedlizard55-lab/MLB-Live-PBP</code> returns 404 (re-checked 2026-11-22).</td>
+          <td class="wrap">The original client source cannot be compared line by line. Behaviour is verified against the official StatsAPI and the pages' own documented contract instead (rows R-1…R-10).</td>
+          <td class="wrap"><a href="https://api.github.com/repos/buffedlizard55-lab/MLB-Live-PBP" target="_blank" rel="noopener">api.github.com/repos/buffedlizard55-lab/MLB-Live-PBP</a></td>
+          <td class="status-unverified">Unverified (source missing)</td>
+        </tr>
+        <tr>
+          <td>D-4</td>
+          <td class="wrap">Club hex colours (<code>UI.TEAM_COLORS</code>) and the hit-model constants (count factors, clamps, tier cut-offs).</td>
+          <td class="wrap"></td>
+          <td class="wrap">Presentation/model tuning only. The API publishes no club hex palette and no model derivation, so no official value is claimed; carried forward from U-1/U-2.</td>
+          <td class="wrap"><a href="https://statsapi.mlb.com/api/v1/teams?sportId=1" target="_blank" rel="noopener">teams</a></td>
+          <td class="status-unverified">Unverified</td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="color:var(--muted);font-size:13px">
+      Items U-1…U-11, I-8, F-001…F-009, L-1…L-4 and RR-01…RR-06 from the earlier passes keep their
+      status in sections 3–9 above; nothing in this pass contradicts them, and U-3/U-5 remain fixed.
+    </p>
+
     <h2>10. Checks you can run</h2>
     <pre class="wrap" style="white-space:pre-wrap">npm install --no-save jsdom     # dev-only; the site itself has no dependencies
 node tests/run-all.mjs           # syntax · link check · DOM-contract check · end-to-end render

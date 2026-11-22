@@ -40,6 +40,13 @@
   function $(id) { return document.getElementById(id); }
 
   function parseDate() {
+    /* A ?date=YYYY-MM-DD deep link (index.html?date=2026-10-28) wins over the
+     * picker, so a shared or bookmarked URL always opens the date it names. */
+    var fromUrl = null;
+    try {
+      fromUrl = new URLSearchParams(global.location.search || '').get('date');
+    } catch (e) { fromUrl = null; }
+    if (MLB.isValidISODate(fromUrl)) return fromUrl;
     var input = $('date-picker');
     var value = input && input.value;
     return MLB.isValidISODate(value) ? value : MLB.todayISO();
@@ -50,6 +57,18 @@
     if (picker && picker.value !== state.date) picker.value = state.date;
     var label = $('date-label');
     if (label) label.textContent = MLB.formatDateLabel(state.date);
+    syncUrl();
+  }
+
+  /* Keep the address bar in step with the selected date (shareable links).
+   * Guarded: history.replaceState is not writable in every embedding context. */
+  function syncUrl() {
+    try {
+      var url = new URL(global.location.href);
+      if (url.searchParams.get('date') === state.date) return;
+      url.searchParams.set('date', state.date);
+      global.history.replaceState(null, '', url.toString());
+    } catch (e) { /* ignore */ }
   }
 
   function statusLine(text, isError) {
@@ -344,7 +363,7 @@
       return '<div class="banner-item banner-review">' +
         '🚨 <strong>' + UI.esc(UI.abbr(away.team) + ' @ ' + UI.abbr(home.team)) + '</strong>' +
         ' — ' + UI.esc(review.typeLabel) + (review.reason ? ': ' + UI.esc(review.reason) : '') +
-        ' <a class="banner-link" href="reviews.html">Replay Feed →</a>' +
+        ' <a class="banner-link" href="reviews.html?date=' + encodeURIComponent(state.date) + '">Replay Feed →</a>' +
         '</div>';
     }).join('');
   }
@@ -441,7 +460,13 @@
   function prevDay() { setDate(MLB.shiftISODate(state.date, -1)); }
   function nextDay() { setDate(MLB.shiftISODate(state.date, 1)); }
   function today() { setDate(MLB.todayISO()); }
-  function pickDate() { setDate(parseDate()); }
+  /* The picker is the user's own choice, so it is read directly: a ?date=
+   * deep link seeds the first view but must not override a later pick. */
+  function pickDate() {
+    var input = $('date-picker');
+    var value = input && input.value;
+    setDate(MLB.isValidISODate(value) ? value : state.date);
+  }
 
   function setFilter(filter) {
     state.filter = filter;
