@@ -518,3 +518,25 @@ node tools/restoration-check.mjs -> ALL CHECKS PASSED
 - `flagged.html` sections rendered as 11 → 12 → 10 because the new tables were inserted above
   “10. Checks you can run”. **Fixed** by moving them below section 10; numbering is now 1…12 in
   order. Recorded as task `D105-6`.
+
+---
+
+# Session `arena/ca40f7ec-livpbp` — Non-Overlapping Provenance, Props & Stylesheet Polish (`2026-11-22`)
+
+- **Session ID:** `ca40f7ec` · **Branch (fixed by Arena):** `arena/ca40f7ec-livpbp`, rebased onto `main` @ [`5a71346`](https://github.com/snapquast73-boop/LIVPBP/commit/5a71346).
+- **Coordination & non-overlapping scope check (`2026-11-22`):**
+  - Merged session `d105b565` (PRs [#23](https://github.com/snapquast73-boop/LIVPBP/pull/23), [#25](https://github.com/snapquast73-boop/LIVPBP/pull/25)) completed its tasks on `main`.
+  - Active parallel branches inspected before claiming:
+    - `arena/aa6c1d7b-livpbp` (open PR [#24](https://github.com/snapquast73-boop/LIVPBP/pull/24)): owns `tests/jsdom-render-test.mjs` + `README.md`.
+    - `arena/af75fbfd-livpbp`: claimed `assets/js/{api,ui,reviews,scoreboard,game,reviews-feed,feed-log}.js`, `server.mjs`, `README.md`, `docs/*.md`, `flagged.html`, `tools/smoke-test.mjs`, `tests/jsdom-render-test.mjs`.
+  - To respect strict non-overlapping file scopes while parallel sessions are in flight, `ca40f7ec` claims **only unclaimed files**: `assets/js/props.js`, `assets/css/style.css`, and additive standalone verification test `tests/props-provenance-test.mjs` (plus append-only coordination notes here). Cross-scope observations for `flagged.html` / `server.mjs` / `reviews-feed.js` are logged below as handoff notes rather than conflicting edits while `af75fbfd` and `aa6c1d7b` hold active claims.
+
+## Task Board (`arena/ca40f7ec-livpbp`)
+
+| Task ID | Task Description | Status | Owning Session | File Scope | Official Source |
+| --- | --- | --- | --- | --- | --- |
+| `CA40-1` | Per-row official MLB StatsAPI `https://` source links on `<table class="driver-table">` in `assets/js/props.js` + honest season-total provenance note on historical/completed games (`U-6` / `I-4`) | `in progress` | `arena/ca40f7ec-livpbp` | `assets/js/props.js`, `assets/css/style.css` | [MLB `people/{id}/stats`](https://statsapi.mlb.com/api/v1/people/660271/stats?stats=season,statSplits,expectedStatistics&group=hitting&season=2026&sitCodes=vl,vr,h,a,d,n,risp) · [MLB `vsPlayer`](https://statsapi.mlb.com/api/v1/people/694192/stats?stats=vsPlayer&group=hitting&opposingPlayerId=656876) |
+| `CA40-2` | Style `.driver-table` and per-row `.src-cell` cleanly in `assets/css/style.css` without altering existing rules | `in progress` | `arena/ca40f7ec-livpbp` | `assets/css/style.css` | [`assets/css/style.css` on `main`](https://github.com/snapquast73-boop/LIVPBP/blob/main/assets/css/style.css) |
+| `CA40-3` | Standalone regression test `tests/props-provenance-test.mjs` verifying every rendered `<table class="driver-table">` row has a verified official `statsapi.mlb.com` source link and zero fabricated values | `in progress` | `arena/ca40f7ec-livpbp` | `tests/props-provenance-test.mjs` | [MLB `game/824638/feed/live`](https://statsapi.mlb.com/api/v1.1/game/824638/feed/live) |
+| `CA40-4` | Merge-preserving integration: rebase onto latest `main` (waiting/preserving PR #24 & any parallel merges), run full test suites, open & merge PR, confirm GitHub Pages deploy, and record here | `in progress` | `arena/ca40f7ec-livpbp` | `COORDINATION.md` | [GitHub Pages API](https://api.github.com/repos/snapquast73-boop/LIVPBP/pages) |
+
