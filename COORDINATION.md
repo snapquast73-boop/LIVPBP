@@ -557,3 +557,36 @@ node tools/restoration-check.mjs -> ALL CHECKS PASSED
   - [`/game.html?gamePk=824638`](https://snapquast73-boop.github.io/LIVPBP/game.html?gamePk=824638) → full CIN 10–8 CHC header, linescore with per-row official source links, ABS chips (from PR #23's D-2 fix).
   - [`/flagged.html`](https://snapquast73-boop.github.io/LIVPBP/flagged.html) → renders; sections 1–12 serve.
 - **Acceptance vs the user's cited sites:** this repo's Replay Feed and Scoreboard now match the behaviour of the cited working references for the same date — the GitHub Page is functional for uploaded-project review purposes. Remaining open items (unchanged, owner-reviewed on `flagged.html`): U-1, U-2, U-6…U-11, I-8, F-001…F-009, L-1…L-4, RR-05, D-1, D-3, D-4. This PR (#27) carries only this record.
+
+---
+
+# Session `arena/6e2a58d9-livpbp` — reference-parity functional pass (2026-11-22)
+
+- **Session ID:** `6e2a58d9` (branch fixed by Arena to `arena/6e2a58d9-livpbp`, from `main` @ `59a7351`). F-001 applies: no `session-<id>/<task>` branches; all work on this branch, integration by PR to `main`.
+- **Brief:** make the site functionally work like the user-supplied references ([LIVPBP2/reviews.html](https://snapquast73-boop.github.io/LIVPBP2/reviews.html), [POSTSSNALRT/reviews.html](https://snapquast73-boop.github.io/POSTSSNALRT/reviews.html)), keeping everything else unchanged. Where the references disagree, the surviving original contract (uploaded `README.md` + `reviews.html` at `aef1a74c`) decides; irreconcilable items are flagged, never inferred.
+- **Claimed at:** 2026-11-22. No other session holds active claims on the files below (all prior boards closed; `S1f-4`/`RR-05` are `needs review` = non-blocking).
+
+## Task board (`arena/6e2a58d9-livpbp`)
+
+| Task | Status | Session | File scope | Notes |
+|---|---|---|---|---|
+| G-1 Replay feed `?date=` deep link + URL sync (LIVPBP2 parity: honors `?date=YYYY-MM-DD`, keeps URL in step when navigating) | **superseded — already done on `main` by `d105b565` (PR #23) and re-tested by `aa6c1d7b` (PR #24)** | `6e2a58d9` (verify only) | — | Same fix landed while this session was claiming; verified on the rebased tree instead of re-implemented (see the conflict log below) |
+| G-2 Feed empty-state message (both references render one; ours renders a blank list) | claimed | `6e2a58d9` | `assets/js/reviews-feed.js` | Sources: [LIVPBP2](https://snapquast73-boop.github.io/LIVPBP2/reviews.html?date=2026-08-28) "No matching review events for this date/filter." · [POSTSSNALRT](https://snapquast73-boop.github.io/POSTSSNALRT/reviews.html) "No tracked events for this filter yet…" |
+| G-3 Alert chime for new **official-scorer pending rulings** and **official scoring changes** (original `reviews.html` button title lists both; ours chimes on neither) | claimed | `6e2a58d9` | `assets/js/reviews-feed.js` | Source: uploaded `reviews.html` L39 button title (`aef1a74c`) — "a gentle raindrop chime for new challenges/reviews/boundary calls, official-scorer pending rulings and official scoring changes (not ABS), and the same chime whenever an active review could remove a run already on the scoreboard" |
+| G-4 Challenges-remaining tracker per uploaded README: team-prefix counter line (`CIN: 2 ABS challenges left now (…)`), both-teams summary `Challenges left: … — …` **on hover** and **on the Under-Review live strip** (ours has no prefix, no summary, empty strip) | claimed | `6e2a58d9` | `assets/js/reviews.js`, `assets/js/reviews-feed.js` | Source: uploaded `README.md` L50–54 (`aef1a74c`) + [LIVPBP2 countersSummary](https://github.com/snapquast73-boop/LIVPBP2/blob/cbcdddece88023ca512a18b7a1165b77d2caa7a7/assets/js/reviews.js#L156-L170). LIVPBP2 also shows the summary as a visible row line — flagged as a reference discrepancy, not copied (README says hover + strip) |
+| G-5 "score impact pending" for a boundary review with no currently credited run (README; ours shows nothing) | claimed | `6e2a58d9` | `assets/js/reviews-feed.js` | Source: uploaded `README.md` L31–33 (`aef1a74c`); [LIVPBP2 render](https://github.com/snapquast73-boop/LIVPBP2/blob/cbcdddece88023ca512a18b7a1165b77d2caa7a7/assets/js/reviews-feed.js#L522-L525) |
+| G-6 Regression checks for G-1…G-5; full suites stay green | claimed | `6e2a58d9` | `tools/smoke-test.mjs`, `tests/jsdom-render-test.mjs` (extend only) | `npm test`, `node tests/run-all.mjs`, `node tools/restoration-check.mjs` must pass |
+| G-7 Line-by-line reference-parity audit + flagged entries (RR-05 resolved: raindrop chime kept per README/LIVPBP2, POSTSSNALRT cha-ching deviation documented) | claimed | `6e2a58d9` | `audit/reference-parity-2026-11-22.md`, `flagged.html` (extend only) | Every claim links an official or first-party source; unverifiable originals stay blank |
+| G-8 Integration: PR → `main`, merge, confirm Pages, record here | claimed | `6e2a58d9` | `COORDINATION.md` | Do not merge a broken site; flagged items do not block |
+
+### Merge-conflict resolution log (2026-11-22, `6e2a58d9`)
+
+- `git pull --rebase origin main` conflicted in `COORDINATION.md` only: parallel sessions
+  `d105b565` (PR #23, merged `1e405cc`) and `aa6c1d7b` (PR #24, merged `f22a84b`) appended board
+  sections at the same spot while this session's claim was in flight (the claim conflicted twice,
+  against  and then against , and was consolidated into this single claim commit
+  on top of  @ ). Resolution keeps **every** incoming session section verbatim and
+  appends this session's section after them. **Nothing of any other session was discarded or rewritten.** Both parallel
+  sessions had already merged the `?date=` deep-link fix this session planned as G-1 (their
+  implementations + the `d105b565` URL-sync variant are on `main`), so G-1 is marked superseded
+  and this session verifies the merged behavior instead of re-implementing it.
