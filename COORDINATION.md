@@ -461,7 +461,8 @@ Merge-conflict note (2026-11-20): rebasing onto `main` @ `9297edc` (PR #12, sess
 | D105-2 `?date=YYYY-MM-DD` deep links + URL sync on the scoreboard and the replay feed | done | `d105b565` | `assets/js/scoreboard.js`, `assets/js/reviews-feed.js`, `tools/smoke-test.mjs` |
 | D105-3 Per-row source links must open the request the row is rendered from | done | `d105b565` | `assets/js/game.js` |
 | D105-4 Publish findings (D-1…D-4) on the Flagged for Review page | done | `d105b565` | `flagged.html`, `docs/verification-report.md` |
-| D105-5 Integration: PR → merge → confirm Pages deploy → record here | in progress | `d105b565` | `README.md`, `COORDINATION.md` |
+| D105-5 Integration: PR → merge → confirm Pages deploy → record here | done | `d105b565` | `README.md`, `COORDINATION.md` |
+| D105-6 Keep `flagged.html` section numbering in order (10 → 11 → 12) | done | `d105b565` | `flagged.html` |
 
 No file owned by another session was edited: every file above was last touched by `f7276bda`
 (`flagged.html`, `docs/verification-report.md`), `f132969c`/`1f908513`
@@ -502,7 +503,21 @@ node tools/restoration-check.mjs -> ALL CHECKS PASSED
 
 ## Integration record
 
-- PR: _filled in below on completion._
+- **[PR #23](https://github.com/snapquast73-boop/LIVPBP/pull/23) — MERGED** at `2026-11-22T01:49:44Z`, merge commit [`1e405cc8fa9c56b5b8fbe4c0c8c76c25a104fb15`](https://github.com/snapquast73-boop/LIVPBP/commit/1e405cc8fa9c56b5b8fbe4c0c8c76c25a104fb15).
+- **CI on the PR:** `test` **pass** + `dom-smoke` **pass** ([workflow run 44973199587](https://github.com/snapquast73-boop/LIVPBP/actions/runs/44973199587)).
+- **GitHub Pages:** [`pages/builds/latest`](https://api.github.com/repos/snapquast73-boop/LIVPBP/pages/builds/latest) → `{"commit":"1e405cc…","status":"built"}`. Publishing source unchanged: `main` / root, legacy build.
+- **Deploy verified on the live site (2026-11-22, after the build):**
+  - [`/?date=2026-10-28`](https://snapquast73-boop.github.io/LIVPBP/?date=2026-10-28) → renders game 849799 (MIL 4 / TB 1, records 4-1 & 1-4, probables, W/L, Tropicana Field, game 5 of 7) — the deep link works in production.
+  - [`/reviews.html?date=2026-10-28`](https://snapquast73-boop.github.io/LIVPBP/reviews.html?date=2026-10-28) → “1 game(s) on Wed Oct 28, 2026 · 0 live · **2 tracked entries**”, ABS challenges tile **2** — matches the official `absChallenges` counters (1 successful per side) fetched independently.
+  - [`/game.html?gamePk=849799`](https://snapquast73-boop.github.io/LIVPBP/game.html?gamePk=849799) → linescore identical to the official response, and each row's `source` link now opens `/api/v1.1/game/849799/feed/live` (D-2 fix live).
+  - [`/flagged.html`](https://snapquast73-boop.github.io/LIVPBP/flagged.html) → sections 11 (R-1…R-11) and 12 (D-1…D-4) serving.
+- Follow-up PR for this record + the section-numbering fix: see the next entry below.
+
+### Post-merge follow-up
+
+- `flagged.html` sections rendered as 11 → 12 → 10 because the new tables were inserted above
+  “10. Checks you can run”. **Fixed** by moving them below section 10; numbering is now 1…12 in
+  order. Recorded as task `D105-6`.
 
 ---
 
