@@ -4,7 +4,8 @@
  * Scans every game on the slate for review events and renders them as a live,
  * chat-style feed:
  *   - manager challenges (M*), umpire/crew-chief reviews (N*), instant replay
- *     (IH), boundary calls (NH / fair-foul / catch-trap / stadium boundary)
+ *     (IH), boundary calls (umpire-side home run / fair-foul / stadium-boundary
+ *     reviews; charged manager challenges of those plays stay challenges)
  *   - ABS pitch challenges (MJ/NJ) with count before/after
  *   - official-scorer pending rulings (os_ruling_pending_*)
  *   - official scoring changes, detected by diffing each completed play's
@@ -32,6 +33,14 @@
     'playEvents,details,call,reviewDetails,isOverturned,inProgress,reviewType,challengeTeamId,runners,' +
     'isScoringEvent,playIndex,movement,index,isPitch,pitchNumber,type,startTime,endTime,hasOutcome';
 
+  /* Official challenge counters live on feed/live gameData only — the schedule
+   * hydrate=review carries manager counters but no absChallenges (verified
+   * 2026-11-22 against https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=2026-08-28&hydrate=review
+   * and https://statsapi.mlb.com/api/v1.1/game/824960/feed/live?fields=gameData,absChallenges,…).
+   * This lean projection fetches just those two counter nodes (~300 B). */
+  var COUNTER_FIELDS = 'gameData,absChallenges,hasChallenges,away,home,usedSuccessful,usedFailed,remaining,review,used';
+  var COUNTER_REFRESH_MS = 30000;
+
   var FILTERS = [
     { id: 'all', label: 'All' },
     { id: 'abs', label: 'ABS' },
@@ -55,6 +64,8 @@
     finalSeen: Object.create(null),
     nextDue: Object.create(null),
     statusByPk: Object.create(null),
+    counterCache: Object.create(null),
+    counterFetchedAt: Object.create(null),
     scanning: false,
     scanError: null,
     soundOn: false,
@@ -166,6 +177,11 @@
           return !e || !e.officialDate || e.officialDate === state.date;
         })
       : [];
+    /* A restored row already showing runs at risk has been announced before
+     * ("It fires once per review", README) — never re-chime it on reload. */
+    state.entries.forEach(function (e) {
+      if (e && e.review && e.review.runsAtRiskCount > 0) e.warned = true;
+    });
     state.snapshots = log.snapshots || Object.create(null);
     state.irregularities = log.irregularities || Object.create(null);
   }
@@ -312,20 +328,25 @@
       var isNew = upsertEntry(entry);
 
       if (isNew && !review.isABS) chime('review');
-      if (isNew && review.runsAtRiskCount > 0) {
+      /* "…and the same chime whenever an active review could remove a run
+       * already on the scoreboard" (sound-button title, reviews.html): fire
+       * once per review, the moment the runs-at-risk condition first becomes
+       * visible — including when it appears after the row was first seen. */
+      var stored = null;
+      for (var si = 0; si < state.entries.length; si += 1) {
+        if (state.entries[si].id === entry.id) { stored = state.entries[si]; break; }
+      }
+      if (review.runsAtRiskCount > 0 && !(stored || entry).warned) {
+        (stored || entry).warned = true;
         chime('risk');
         notifyRunAtRisk(review, teams);
-      }
-      if (review.runsAtRiskCount > 0 && review.inProgress) {
-        /* Keep the warning visible on every poll, but never re-chime. */
-        entry.warned = true;
       }
     });
 
     /* ---- official-scorer pending rulings */
     var pending = Reviews.pendingRulings(plays, meta);
     pending.forEach(function (row) {
-      upsertEntry({
+      var isNew = upsertEntry({
         id: row.id,
         kind: 'pending',
         gamePk: game.gamePk,
@@ -346,6 +367,9 @@
           family: 'pending',
         },
       });
+      /* The sound-button title on the uploaded reviews.html lists
+       * official-scorer pending rulings among the announced events. */
+      if (isNew) chime('pending');
     });
 
     /* ---- official scoring changes */
@@ -355,7 +379,7 @@
     state.snapshots[game.gamePk] = snapshot;
 
     diff.changes.forEach(function (change) {
-      upsertEntry({
+      var isNew = upsertEntry({
         id: game.gamePk + ':' + change.atBatIndex + ':scoring-change',
         kind: 'scoring_change',
         gamePk: game.gamePk,
@@ -376,6 +400,9 @@
           family: 'scoring',
         },
       });
+      /* The sound-button title on the uploaded reviews.html lists official
+       * scoring changes among the announced events. */
+      if (isNew) chime('scoring');
       if (state.log) {
         state.log.grace = state.log.grace || {};
         state.log.grace[game.gamePk] = Date.now();
@@ -391,19 +418,70 @@
         ') disappeared from the payload after being observed — flagged, not corrected.');
     });
 
-    /* ---- counter regressions */
+    /* ---- counter refresh (manager: schedule hydrate; ABS: lean feed fetch) */
     var reviewCounters = Reviews.managerCounters(result.payload.review || (game.review || null));
     var absCounters = Reviews.absCounters(result.payload.absChallenges || null);
-    var regression = Reviews.counterRegression(state.counterCache && state.counterCache[game.gamePk], {
-      manager: reviewCounters, abs: absCounters,
+    var cache = state.counterCache[game.gamePk] || (state.counterCache[game.gamePk] = {});
+    /* Regression check runs per counter kind on the values actually read —
+     * a kind that was not part of this reading is skipped, never treated as
+     * a counter that vanished (absent counters stay absent, never zero). */
+    [
+      { kind: 'manager', prev: cache.manager, next: reviewCounters },
+      { kind: 'ABS', prev: cache.abs, next: absCounters },
+    ].forEach(function (pair) {
+      if (!pair.next) return;
+      var regression = Reviews.counterRegression(pair.prev, pair.next);
+      if (regression) {
+        regression.forEach(function (note) {
+          noteIrregularity(game.gamePk, 'Official ' + pair.kind + ' counter ' + note + ' — flagged, not corrected.');
+        });
+      }
     });
-    if (regression) {
-      regression.forEach(function (note) {
-        noteIrregularity(game.gamePk, 'Official counter ' + note + ' — flagged, not corrected.');
+    if (reviewCounters) cache.manager = reviewCounters;
+    if (absCounters) cache.abs = absCounters;
+    if (reviews.length) maybeFetchCounters(game);
+  }
+
+  /* ABS counters exist only on feed/live gameData.absChallenges; fetch the
+   * verified lean projection for games whose rows need them (throttled). */
+  function maybeFetchCounters(game) {
+    if (!game || !game.gamePk) return;
+    var pk = game.gamePk;
+    var now = Date.now();
+    var last = state.counterFetchedAt[pk] || 0;
+    if (last && now - last < COUNTER_REFRESH_MS) return;
+    state.counterFetchedAt[pk] = now;
+    var seq = state.dateSeq;
+    var date = state.date;
+    MLB.gameFeed(pk, { fields: COUNTER_FIELDS, retries: 0 }).then(function (payload) {
+      if (seq !== state.dateSeq || date !== state.date) return;
+      var gd = payload && payload.gameData;
+      if (!gd) return;
+      var cache = state.counterCache[pk] || (state.counterCache[pk] = {});
+      var nextManager = Reviews.managerCounters(gd.review || null);
+      var nextAbs = Reviews.absCounters(gd.absChallenges || null);
+      [
+        { kind: 'manager', prev: cache.manager, next: nextManager },
+        { kind: 'ABS', prev: cache.abs, next: nextAbs },
+      ].forEach(function (pair) {
+        if (!pair.next) return;
+        var regression = Reviews.counterRegression(pair.prev, pair.next);
+        if (regression) {
+          regression.forEach(function (note) {
+            noteIrregularity(pk, 'Official ' + pair.kind + ' counter ' + note + ' — flagged, not corrected.');
+          });
+        }
       });
-    }
-    state.counterCache = state.counterCache || Object.create(null);
-    state.counterCache[game.gamePk] = { manager: reviewCounters, abs: absCounters };
+      if (nextManager) cache.manager = nextManager;
+      if (nextAbs) cache.abs = nextAbs;
+      renderIfChanged();
+    }).catch(function () {
+      /* Counters are best-effort: manager counters already come from the
+       * schedule hydrate. Allow a retry after the throttle window. */
+      if (seq === state.dateSeq && date === state.date) {
+        state.counterFetchedAt[pk] = now - COUNTER_REFRESH_MS + 5000;
+      }
+    });
   }
 
   function scan() {
@@ -637,11 +715,19 @@
     el.innerHTML = '<div class="active-strip"><h3>Under review</h3><div class="active-items">' +
       active.map(function (e) {
         var r = e.review;
+        var cached = state.counterCache && state.counterCache[e.gamePk];
+        var summaryText = cached ? Reviews.countersSummary({
+          manager: cached.manager,
+          abs: cached.abs,
+          awayLabel: e.teams ? UI.abbr(e.teams.away) : '',
+          homeLabel: e.teams ? UI.abbr(e.teams.home) : '',
+        }) : '';
         return '<div class="active-item">' +
           '<a href="game.html?gamePk=' + encodeURIComponent(e.gamePk) + '"><b>' + UI.esc(e.matchupLabel || '') + '</b></a>' +
           UI.chip(r.typeLabel + (r.reason ? ': ' + r.reason : ''), r.isABS ? 'chip-abs' : 'chip-review') +
           '<span>' + UI.esc(r.inningLabel || '') + '</span>' +
           (r.runsAtRiskCount ? UI.chip('⚠️ ' + r.runsAtRiskCount + ' run(s) at risk', 'chip-danger') : '') +
+          (summaryText ? ' <span class="counter-note">(' + UI.esc(summaryText) + ')</span>' : '') +
           '</div>';
       }).join('') + '</div></div>';
   }
@@ -649,6 +735,12 @@
   function scoreLine(label, score) {
     if (!score) return '';
     return '<dt>' + UI.esc(label) + '</dt><dd>' + UI.esc(score.away) + '–' + UI.esc(score.home) + '</dd>';
+  }
+
+  /* Tracker slot that carries a text note instead of a score ("score impact
+   * pending", "– (not observed)"). */
+  function textLine(label, text) {
+    return '<dt>' + UI.esc(label) + '</dt><dd>' + UI.esc(text) + '</dd>';
   }
 
   function renderRow(entry) {
@@ -669,12 +761,29 @@
     if (r.runsAtRiskCount) chips.push(UI.chip('⚠️ ' + r.runsAtRiskCount + ' run(s) at risk', 'chip-danger'));
 
     var trackerHtml = '';
-    if (entry.kind === 'review' && (tracker.before || tracker.possible || tracker.actual)) {
-      trackerHtml = '<dl class="score-track">' +
-        scoreLine('Before review', tracker.before) +
-        scoreLine('Possible after (conditional)', tracker.possible) +
-        scoreLine('Actual after (official)', tracker.actual) +
-        '</dl>';
+    if (entry.kind === 'review') {
+      var trackerRows = '';
+      if (tracker.before) {
+        trackerRows += scoreLine('Before review', tracker.before);
+      } else if (!r.inProgress) {
+        /* "If the page opens only after resolution, it shows an attributable
+         * official Actual-after score when available and honestly marks
+         * Before/Possible as not observed" (uploaded README). */
+        trackerRows += textLine('Before review', '– (not observed)');
+      }
+      if (tracker.possible) {
+        trackerRows += scoreLine('Possible after (conditional)', tracker.possible);
+      } else if (r.isBoundary || r.runsAtRiskCount > 0) {
+        /* "A boundary review with no currently credited run says 'score
+         * impact pending' and does not invent an alternate score"
+         * (uploaded README) — same honest note when runs are at risk but the
+         * conditional score was never observable. */
+        trackerRows += textLine('Possible after (conditional)', 'score impact pending');
+      } else if (!tracker.before && !r.inProgress) {
+        trackerRows += textLine('Possible after (conditional)', '– (not observed)');
+      }
+      if (tracker.actual) trackerRows += scoreLine('Actual after (official)', tracker.actual);
+      if (trackerRows) trackerHtml = '<dl class="score-track">' + trackerRows + '</dl>';
     }
 
     var absLine = '';
@@ -685,12 +794,25 @@
     }
 
     var counterText = '';
+    var summaryText = '';
     var cached = state.counterCache && state.counterCache[entry.gamePk];
+    var challengerLabel = (r.challengerSide && entry.teams && entry.teams[r.challengerSide])
+      ? UI.abbr(entry.teams[r.challengerSide]) : '';
     if (cached && r.family === 'manager' && r.challengerSide && cached.manager && cached.manager[r.challengerSide]) {
-      counterText = Reviews.counterLine({ manager: cached.manager, side: r.challengerSide });
+      counterText = Reviews.counterLine({ manager: cached.manager, side: r.challengerSide, label: challengerLabel });
     }
     if (cached && r.isABS && r.challengerSide && cached.abs && cached.abs[r.challengerSide]) {
-      counterText = Reviews.counterLine({ abs: cached.abs, side: r.challengerSide });
+      counterText = Reviews.counterLine({ abs: cached.abs, side: r.challengerSide, label: challengerLabel });
+    }
+    if (cached) {
+      /* Both-teams summary ("Challenges left: … — …"), shown on hover of the
+       * counter (uploaded README) and on the Under-Review live strip. */
+      summaryText = Reviews.countersSummary({
+        manager: cached.manager,
+        abs: cached.abs,
+        awayLabel: entry.teams ? UI.abbr(entry.teams.away) : '',
+        homeLabel: entry.teams ? UI.abbr(entry.teams.home) : '',
+      });
     }
 
     var changeHtml = '';
@@ -708,7 +830,11 @@
         '<div class="feed-irregular">Source: ' + UI.esc(entry.pending.source || '') + '</div>';
     }
 
-    var irregularity = (state.irregularities[entry.gamePk] || [])[0];
+    /* Only irregularity notes that name THIS entry's id belong on this row —
+     * a game-level note must not be repeated on every row of the game. */
+    var irregularities = (state.irregularities[entry.gamePk] || []).filter(function (n) {
+      return !!entry.id && n.indexOf(entry.id) !== -1;
+    });
 
     return '<div class="' + cls + '">' +
       '<div class="feed-avatar">' + avatar + '</div>' +
@@ -726,21 +852,30 @@
         (r.description ? '<div class="feed-sub">' + UI.esc(r.description) + '</div>' : '') +
         absLine + changeHtml + pendingHtml +
         (trackerHtml ? trackerHtml : '') +
-        (counterText ? '<div class="counter-note">' + UI.esc(counterText) + '</div>' : '') +
-        (irregularity ? '<div class="feed-irregular">⚠️ ' + UI.esc(irregularity) + '</div>' : '') +
+        (counterText ? '<div class="counter-note"' + (summaryText ? ' title="' + UI.esc(summaryText) + '"' : '') +
+          '>' + UI.esc(counterText) + '</div>' : '') +
+        irregularities.map(function (n) {
+          return '<div class="feed-irregular">⚠️ ' + UI.esc(n) + '</div>';
+        }).join('') +
         '<div class="feed-chips">' + chips.join('') + '</div>' +
       '</div>' +
     '</div>';
   }
 
   /* Same idea as the scoreboard: only touch the DOM when the tracked data
-   * actually changed, so a 250 ms scan does not re-create identical rows. */
+   * actually changed, so a 250 ms scan does not re-create identical rows.
+   * Counter cache and irregularities feed the rendered rows too, so they are
+   * part of the signature. */
   function entriesSignature() {
     return state.filter + '|' + state.entries.map(function (e) {
       return [e.id, e.lastSeen, e.review && e.review.outcome, e.review && e.review.inProgress,
         e.scoreTracker && e.scoreTracker.actual ? e.scoreTracker.actual.away + '-' + e.scoreTracker.actual.home : '',
         e.scoreTracker && e.scoreTracker.before ? e.scoreTracker.before.away + '-' + e.scoreTracker.before.home : ''].join(':');
-    }).join('|');
+    }).join('|') + '|' + safeJson(state.irregularities) + '|' + safeJson(state.counterCache);
+  }
+
+  function safeJson(value) {
+    try { return JSON.stringify(value) || ''; } catch (e) { return ''; }
   }
 
   function renderIfChanged() {
@@ -750,6 +885,33 @@
     render();
   }
 
+  /* Irregularity notes that do not name any tracked entry (play edits,
+   * vanished plays, counter regressions) still must be visible — the page
+   * contract says they are "flagged as irregularities for review, never
+   * corrected or hidden" — so they render as their own flagged rows. */
+  function unattachedIrregularities() {
+    var ids = state.entries.map(function (e) { return e.id; });
+    var out = [];
+    Object.keys(state.irregularities).forEach(function (pk) {
+      (state.irregularities[pk] || []).forEach(function (n) {
+        var attached = ids.some(function (id) { return !!id && n.indexOf(id) !== -1; });
+        if (!attached) out.push({ gamePk: Number(pk), note: n });
+      });
+    });
+    return out;
+  }
+
+  function flaggedRowHtml(row) {
+    var game = state.games.filter(function (g) { return g.gamePk === row.gamePk; })[0];
+    var label = game
+      ? UI.abbr(teamsOf(game).away) + ' @ ' + UI.abbr(teamsOf(game).home)
+      : 'Game ' + row.gamePk;
+    return '<div class="feed-row is-flagged"><div class="feed-avatar">⚠️</div><div class="feed-body">' +
+      '<div class="feed-top"><a href="game.html?gamePk=' + encodeURIComponent(row.gamePk) + '"><b>' +
+      UI.esc(label) + '</b></a></div>' +
+      '<div class="feed-irregular">' + UI.esc(row.note) + '</div></div></div>';
+  }
+
   function render() {
     renderTabs();
     renderStats();
@@ -757,7 +919,16 @@
     var list = $('feed-list');
     if (!list) return;
     var rows = visibleEntries();
-    list.innerHTML = rows.map(renderRow).join('');
+    var html = rows.map(renderRow).join('') + unattachedIrregularities().map(flaggedRowHtml).join('');
+    if (!rows.length) {
+      /* Both reference sites render an empty-state notice instead of a blank
+       * list (LIVPBP2: "No matching review events for this date/filter.";
+       * POSTSSNALRT: "No tracked events for this filter yet…"). */
+      html += '<div class="feed-empty">No tracked events for this date and filter yet. ' +
+        'New challenges, reviews, boundary calls, ABS challenges, official-scorer pending rulings ' +
+        'and official scoring changes appear here live.</div>';
+    }
+    list.innerHTML = html;
   }
 
   function updateChrome() {

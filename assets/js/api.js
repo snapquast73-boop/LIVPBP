@@ -200,14 +200,18 @@
     });
   }
 
-  /* Full live feed (v1.1 first, v1 as the documented fallback). */
+  /* Full live feed (v1.1 first, v1 as the documented fallback). `opts.fields`
+   * requests a StatsAPI `fields` projection (verified 2026-11-22:
+   * /api/v1.1/game/824960/feed/live?fields=gameData,absChallenges,… returns
+   * exactly gameData.review + gameData.absChallenges counter nodes). */
   function gameFeed(gamePk, opts) {
     opts = opts || {};
-    var url = API_ROOT + '/v1.1/game/' + gamePk + '/feed/live';
+    var qs = opts.fields ? '?fields=' + encodeURIComponent(opts.fields) : '';
+    var url = API_ROOT + '/v1.1/game/' + gamePk + '/feed/live' + qs;
     return getJSON(url, { signal: opts.signal, retries: opts.retries })
       .catch(function (err) {
         if (err && err.status === 404) {
-          return getJSON(API_ROOT + '/v1/game/' + gamePk + '/feed/live', { signal: opts.signal });
+          return getJSON(API_ROOT + '/v1/game/' + gamePk + '/feed/live' + qs, { signal: opts.signal });
         }
         throw err;
       });
