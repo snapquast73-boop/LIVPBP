@@ -919,6 +919,45 @@ console.log('\n[10] live-API shape & replay-audit regressions (1f908513 / RR-01.
   feedDom.window.close();
 }
 
+console.log('\n[11] ?date= deep links (shareable scoreboard / replay-feed URLs)');
+{
+  const boardDom = await boot('index.html', { query: '?date=2026-09-15', beforeParse(w) { w.localStorage.clear(); } });
+  await new Promise((r) => setTimeout(r, 400));
+
+  await check('index.html?date= opens that date and renders its games', () => {
+    const st = boardDom.window.Scoreboard.state;
+    assert(st.date === '2026-09-15', 'expected 2026-09-15, got ' + st.date);
+    assert(st.games.length === SCHEDULE.dates[0].games.length,
+      'expected ' + SCHEDULE.dates[0].games.length + ' games, got ' + st.games.length);
+    const html = text(boardDom.window.document.getElementById('game-list'));
+    assert(/Dodgers/.test(html), 'game cards did not render: ' + html.slice(0, 120));
+  });
+
+  await check('scoreboard keeps the address bar in step with the selected date', () => {
+    const href = boardDom.window.location.href;
+    assert(/[?&]date=2026-09-15/.test(href), 'date missing from URL: ' + href);
+    boardDom.window.Scoreboard.setDate('2026-09-14');
+    assert(/[?&]date=2026-09-14/.test(boardDom.window.location.href),
+      'URL did not follow setDate: ' + boardDom.window.location.href);
+  });
+
+  boardDom.window.close();
+
+  const feedDomLink = await boot('reviews.html', { query: '?date=2026-09-15', beforeParse(w) { w.localStorage.clear(); } });
+  await new Promise((r) => setTimeout(r, 400));
+
+  await check('reviews.html?date= opens that date in the replay feed', () => {
+    const st = feedDomLink.window.ReplayFeed.state;
+    assert(st.date === '2026-09-15', 'expected 2026-09-15, got ' + st.date);
+    const label = text(feedDomLink.window.document.getElementById('date-label'));
+    assert(/Sep 15, 2026/.test(label), 'date label not updated: ' + label);
+    assert(/[?&]date=2026-09-15/.test(feedDomLink.window.location.href),
+      'date missing from URL: ' + feedDomLink.window.location.href);
+  });
+
+  feedDomLink.window.close();
+}
+
 function __setDate(dom) {
   const picker = dom.window.document.getElementById('date-picker');
   if (picker) {
