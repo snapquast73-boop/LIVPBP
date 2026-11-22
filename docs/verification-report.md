@@ -115,3 +115,43 @@ is stubbed, with payloads matching the shapes in §3). 40 assertions, all passin
 | I-8 | “Confirmed” outcome | `isOverturned` boolean | structured payload has only `isOverturned`, so “stands” vs “confirmed” is indistinguishable; MLB's free-text description (which may say “confirmed”) is displayed verbatim | <https://statsapi.mlb.com/api/v1.1/game/824466/feed/live> |
 | L-1..L-4 | Live-StatsAPI field alignment (`expectedStatistics.avg`, `vsPlayerTotal`, `boxscore.seasonStats`, PA-ending `MJ` & `MF`) | `.277` (`stat.avg`) / `vsPlayerTotal` | **fixed & regression-tested** by session `1f908513` (44/44 checks in `tools/smoke-test.mjs`) | <https://statsapi.mlb.com/api/v1/people/682829/stats?stats=season,expectedStatistics&group=hitting&season=2026> |
 | RR-01..RR-06 | Replay Feed comparison handoff (`dateSeq` guard, official `pitchNumber`, scoring changes in `All`, per-row MLB API links, smoke readiness) | `pitchNumber: 3` (play 54, game 823243) | **fixed & regression-tested** by session `1f908513`; `RR-05` audio cue left unverified (blank) | <https://statsapi.mlb.com/api/v1/game/823243/playByPlay?fields=allPlays,about,atBatIndex,playEvents,pitchNumber,reviewDetails,reviewType> |
+
+---
+
+## 6. Re-verification pass — session `d105b565` (2026-11-22)
+
+Every value below was fetched again on **2026-11-22** from the official
+`statsapi.mlb.com` (or read from the deployed Pages site) — nothing was carried over from an
+earlier session's notes without re-fetching it. Blank cells mean the official payload does not
+publish the value; no cell is inferred.
+
+| # | Claim | Value read from the official response | Official source | Status |
+|---|---|---|---|---|
+| R-1 | `UI.TEAM_ABBR` (30 clubs) = official `abbreviation` | all 30 match (incl. `AZ` 109, `ATH` 133, `CWS` 145, `KC` 118, `SD` 135, `TB` 139, `WSH` 120) | <https://statsapi.mlb.com/api/v1/teams?sportId=1&fields=teams,id,name,abbreviation,teamName&season=2026> | Verified |
+| R-2 | `FALLBACK_REASONS` in `assets/js/reviews.js` matches the API wording for every `M*`/`N*` code | `MA…MV`, `NA…NW`, `MJ`/`NJ` “Pitch Result”, `MF` “Close play at 1st”, `IH` reason “Review” / detailedState “Instant Replay”; `MX`/`NX` publish no `reason` and the code adds none | <https://statsapi.mlb.com/api/v1/gameStatus> | Verified |
+| R-3 | Hydrated schedule card fields used by `scoreboard.js` | game 849799: MIL 4 / TB 1, `leagueRecord` 4-1 & 1-4, W Misiorowski, L Rasmussen, Tropicana Field, game 5 of 7 | <https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=2026-10-28&hydrate=probablePitcher,linescore,decisions,review> | Verified |
+| R-4 | `expectedStatistics` publishes xBA in `stat.avg` | `{"avg":".285","slg":".549","woba":".393"}` (player 660271, 2026); no `xba` key | <https://statsapi.mlb.com/api/v1/people/660271/stats?stats=expectedStatistics&group=hitting&season=2026> | Verified |
+| R-5 | H2H is `vsPlayerTotal` (career) + `vsPlayer` (per season) | Chourio vs Rasmussen: 0-for-3 career, 0-for-3 in 2025 | <https://statsapi.mlb.com/api/v1/people/694192/stats?stats=vsPlayer&group=hitting&opposingPlayerId=656876> | Verified |
+| R-6 | Season lines at `boxscore.teams.<side>.players.ID<id>.seasonStats` | `ID806198.seasonStats.batting = {hits:17, avg:".354", atBats:48}` | <https://statsapi.mlb.com/api/v1/game/849799/boxscore> | Verified |
+| R-7 | `os_ruling_pending_primary` / `_prior` are real event types | both present, description “Official Scorer Ruling Pending” | <https://statsapi.mlb.com/api/v1/eventTypes> | Verified |
+| R-8 | ABS / manager challenge counters for game 849799 | `absChallenges.away/home = {usedSuccessful:1, usedFailed:0, remaining:2}`, `review.away/home = {used:0, remaining:2}` — matches the two overturned ABS chips the page printed | <https://statsapi.mlb.com/api/v1.1/game/849799/feed/live?fields=gameData,absChallenges,hasChallenges,away,home,usedSuccessful,usedFailed,remaining,review,used> | Verified |
+| R-9 | Deployed game page reproduces the official linescore for game 849799 | MIL `0 1 0 0 1 2 0 0 0 · 4 8 2`, TB `0 0 0 0 0 0 0 0 1 · 1 4 0` — identical | <https://statsapi.mlb.com/api/v1/game/849799/linescore> · <https://snapquast73-boop.github.io/LIVPBP/game.html?gamePk=849799> | Verified |
+| R-10 | Deployed scoreboard / replay feed / flagged page execute and render | offseason slate: scoreboard offers `Wed Oct 28, 2026`; feed renders 8 summary tiles + scan line | <https://snapquast73-boop.github.io/LIVPBP/> · <https://snapquast73-boop.github.io/LIVPBP/reviews.html> | Verified |
+| R-11 | `?date=YYYY-MM-DD` deep links on the scoreboard and the replay feed | added this pass; URL follows the selected date; 3 new checks in `tools/smoke-test.mjs` §[11] | <https://github.com/snapquast73-boop/LIVPBP/blob/main/tools/smoke-test.mjs> | Verified |
+
+### Irregularities opened in this pass
+
+| # | Irregularity | Official evidence | Resolution | Status |
+|---|---|---|---|---|
+| D-1 | Two official endpoints disagree on errors for the same team: game 775296 home `errors` = **2** in `/api/v1/game/775296/linescore`, **3** in `/api/v1.1/game/775296/feed/live` | <https://statsapi.mlb.com/api/v1/game/775296/linescore> · <https://statsapi.mlb.com/api/v1.1/game/775296/feed/live> | Page renders the `feed/live` value (single request feeds the page); nothing corrected or guessed — flagged for the owner | Flagged |
+| D-2 | Per-row “source” links opened `/linescore` and `/boxscore`, not the request the rows are rendered from, so for games like 775296 the link showed a different number than the row | same as D-1 | **Fixed:** links now open `/api/v1.1/game/<pk>/feed/live` (`liveData.linescore` / `liveData.boxscore`) | Fixed |
+| D-3 | Original client source still unavailable (reconstruction, not a restoration) | <https://api.github.com/repos/buffedlizard55-lab/MLB-Live-PBP> → 404 (re-checked 2026-11-22) | Behaviour verified against the official API instead; no byte-for-byte comparison is possible | Unverified (source missing) |
+| D-4 | Club hex colours and hit-model constants | | | Unverified — presentation/model tuning, no official value exists; carried from U-1/U-2 |
+
+### Checks run on this pass
+
+```text
+npm ci && npm test              -> 47 passed, 0 failed   (was 44; +3 deep-link checks)
+node tests/run-all.mjs          -> syntax OK, 40 local refs OK, 8 bindings OK, 37/37 jsdom
+node tools/restoration-check.mjs-> ALL CHECKS PASSED
+```

@@ -278,9 +278,9 @@ for archived games the request is scoped to the feed's game season.
 
 ```
 .
-├── index.html                 # Scoreboard page (all games for a date)
+├── index.html                 # Scoreboard page (all games for a date; ?date=YYYY-MM-DD)
 ├── game.html                  # Game page (?gamePk=<id>)
-├── reviews.html               # All-games Replay Feed (live chat-style review feed)
+├── reviews.html               # All-games Replay Feed (?date=YYYY-MM-DD; live review feed)
 ├── 404.html
 ├── flagged.html               # ⚑ Flagged for Review — irregularities + official source links
 ├── assets/
