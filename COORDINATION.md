@@ -445,3 +445,11 @@ Merge-conflict note (2026-11-20): rebasing onto `main` @ `9297edc` (PR #12, sess
 | `S1f-2` | Live-StatsAPI field fixes (`expectedStatistics.avg` xBA, `vsPlayerTotal` H2H, combined `!split.team` splits, `remainingPAs`, `boxscore.seasonStats`, `MF` fallback, `events[last].index`, PA-ending `MJ` counts) | `done` | `arena/1f908513-livpbp` | `assets/js/props.js`, `assets/js/game.js`, `assets/js/reviews.js` |
 | `S1f-3` | Replay-audit handoff (`RR-01` `dateSeq` guard, `RR-02` official `pitchNumber`, `RR-03` scoring changes in `All`, `RR-04` direct MLB API row links, `RR-06` smoke-test script readiness) | `done` | `arena/1f908513-livpbp` | `assets/js/reviews-feed.js`, `assets/js/reviews.js`, `assets/js/game.js`, `tools/smoke-test.mjs` |
 | `S1f-4` | Per-row official `https://` source links, blank unconfirmed value cells, and `L-1..L-4` + `RR-01..RR-06` tables on `flagged.html` & `docs/*.md` (`RR-05` flagged `needs review`) | `needs review` | `arena/1f908513-livpbp` | `flagged.html`, `docs/verification-report.md`, `docs/statsapi-field-map.md`, `COORDINATION.md` |
+
+## Session `1587d8dd` — follow-up audit (2026-11-22)
+
+| Task | Status | Owner | File scope | Official source |
+|---|---|---|---|---|
+| Audit current functionality, tests and Pages deployment; identify any further work | in progress | `1587d8dd` | `COORDINATION.md` | https://docs.github.com/en/pages/getting-started-with-github-pages/about-github-pages |
+
+Arena requires the existing `arena/1587d8dd-livpbp` branch; no separate session branch will be created. Previously logged in-progress integration claims are historical and have completion records above.
