@@ -518,3 +518,29 @@ node tools/restoration-check.mjs -> ALL CHECKS PASSED
 - `flagged.html` sections rendered as 11 → 12 → 10 because the new tables were inserted above
   “10. Checks you can run”. **Fixed** by moving them below section 10; numbering is now 1…12 in
   order. Recorded as task `D105-6`.
+
+---
+
+# Session `arena/aa6c1d7b-livpbp` — functional-parity pass vs the cited working sites (2026-11-22)
+
+- **Session ID:** `aa6c1d7b` (Arena fixes this session to branch `arena/aa6c1d7b-livpbp`, branched from `main` @ `59a7351` (merge of PR #22). Arena forbids creating/pushing other branches, so the brief's `session-<id>/<task>` rule cannot be followed literally; same deviation as the previous sessions' F-001.)
+- **User's reference sites (reported working):** the Replay Feed on
+  [LIVPBP2](https://snapquast73-boop.github.io/LIVPBP2/reviews.html) and
+  [POSTSSNALRT](https://snapquast73-boop.github.io/POSTSSNALRT/reviews.html). Both are sibling
+  uploads of the same lost upstream (`buffedlizard55-lab/MLB-Live-PBP`, 404) restored by other
+  sessions; this repo (LIVPBP) is a third, independent restoration already live at
+  <https://snapquast73-boop.github.io/LIVPBP/>.
+
+## Task board (`arena/aa6c1d7b-livpbp`)
+
+| Task ID | Description | Status | File scope |
+|---|---|---|---|
+| `AA6C-1` | Functional-parity fix: honor `?date=YYYY-MM-DD` on Scoreboard + Replay Feed. Independently implemented in `820b7e4`, then superseded by `d105b565`'s merged PR #23 (`b50251a` URL-sync variant, merged 2026-11-22T01:49:44Z while this session was in flight). Merge resolution: `d105b565`'s implementation kept verbatim; this branch carries only the additive regression tests + a complementary README paragraph. | done | `tests/jsdom-render-test.mjs`, `README.md` (JS taken from `main`) |
+| `AA6C-2` | Verification pass: `npm test`, `node tests/run-all.mjs`, live fetches of the deployed pages incl. `?date=2026-08-28` (15 games; reviews feed with ABS rows) | pending | — |
+| `AA6C-3` | Integration: PR → merge to `main` → confirm GitHub Pages deploy → record here | pending | repo root (PR only) |
+
+## Log (`aa6c1d7b`)
+
+- 2026-11-22 — AA6C-1 **superseded by PR #23**: this session independently implemented `?date=` support (commit `820b7e4`: `urlDate()` read at init only; picker/day-nav unchanged), but `main` moved to `1e405cc` (merge of PR #23) while this branch was in flight — `d105b565` had merged a broader variant (`b50251a`: `?date=` honored in `parseDate()`, `history.replaceState` URL sync, picker read directly in `pickDate()`, scoreboard review banner links to `reviews.html?date=<selected>`, `tools/smoke-test.mjs` §[11] ×3 checks) at 2026-11-22T01:49:44Z. Merge resolution: **their JS kept verbatim** (my `urlDate()` hunks removed), nothing of theirs discarded; this branch keeps only (a) 10 jsdom regression checks (§3b) that pass against their implementation — verified locally, and (b) a complementary README deep-link paragraph. `README.md` also documents their file-tree annotations (unchanged).
+  - 2026-11-22 — Merge conflict resolution log: `git merge origin/main` conflicted in `COORDINATION.md` only. Auto-merged `assets/js/scoreboard.js` / `reviews-feed.js` / `README.md` initially produced a duplicated mix (my `urlDate()` next to their URL-aware `parseDate()`); the JS was hand-resolved to match `origin/main` exactly, and `COORDINATION.md` kept **both** session sections verbatim (this section updated as above). `tests/jsdom-render-test.mjs` merged cleanly. See below for the combined verification run.
+- 2026-11-22 — Audit vs the two cited sites. HTML shells are byte-near-identical (footer wording only). Functional gap found: `parseDate()` in this repo reads only the `date-picker` element; `window.location.search` is never consulted (`assets/js/scoreboard.js:42`, `assets/js/reviews-feed.js:85`). Verified on the live site: `LIVPBP/reviews.html?date=2026-08-28` and `LIVPBP/index.html?date=2026-08-28` render today (offseason, 0 games) instead of 2026-08-28, while `LIVPBP2/index.html?date=2026-08-28` renders all 15 Finals and `LIVPBP2/reviews.html?date=2026-08-28` renders 10 reviews & challenges / 79 ABS challenges for that date. POSTSSNALRT also ignores `?date=` (date-picker navigation only), so `?date=` support is taken from LIVPBP2, the cited site that has it. No other functional deltas found: `game.html?gamePk=` works here (verified live on gamePk 824638: header, linescore + per-row source links, ABS chips), `index.html` offseason slate notice + "Most recent date with games" jump button works (schedule-range endpoint confirmed: games listed through 2026-10-28), `flagged.html` renders.

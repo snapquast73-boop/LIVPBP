@@ -28,6 +28,9 @@ mlb.com uses, re-implemented from scratch in vanilla HTML/CSS/JS.
 
 - **Scoreboard** (like [MLB.com](https://www.mlb.com/scoreboard)) — every game for any
   date, with live scores, inning, count, probable pitchers, and W/L/S decisions.
+  Deep links: `index.html?date=YYYY-MM-DD` opens a specific day (same for
+  `reviews.html?date=YYYY-MM-DD`), and the address bar follows the selected date;
+  the date-picker and day-nav buttons stay the in-page controls.
 - **Game view** (like [MLB.com Gameday](https://www.mlb.com/gameday)) — **who's at bat,
   who's pitching, the count, outs, runners on base**, on-deck / in-the-hole hitters,
   pitch counts, last play, inning-by-inning linescore, full box score, and the complete
