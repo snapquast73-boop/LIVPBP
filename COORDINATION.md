@@ -521,15 +521,69 @@ node tools/restoration-check.mjs -> ALL CHECKS PASSED
 
 ---
 
+# Session `arena/aa6c1d7b-livpbp` — functional-parity pass vs the cited working sites (2026-11-22)
+
+- **Session ID:** `aa6c1d7b` (Arena fixes this session to branch `arena/aa6c1d7b-livpbp`, branched from `main` @ `59a7351` (merge of PR #22). Arena forbids creating/pushing other branches, so the brief's `session-<id>/<task>` rule cannot be followed literally; same deviation as the previous sessions' F-001.)
+- **User's reference sites (reported working):** the Replay Feed on
+  [LIVPBP2](https://snapquast73-boop.github.io/LIVPBP2/reviews.html) and
+  [POSTSSNALRT](https://snapquast73-boop.github.io/POSTSSNALRT/reviews.html). Both are sibling
+  uploads of the same lost upstream (`buffedlizard55-lab/MLB-Live-PBP`, 404) restored by other
+  sessions; this repo (LIVPBP) is a third, independent restoration already live at
+  <https://snapquast73-boop.github.io/LIVPBP/>.
+
+## Task board (`arena/aa6c1d7b-livpbp`)
+
+| Task ID | Description | Status | File scope |
+|---|---|---|---|
+| `AA6C-1` | Functional-parity fix: honor `?date=YYYY-MM-DD` on Scoreboard + Replay Feed. Independently implemented in `820b7e4`, then superseded by `d105b565`'s merged PR #23 (`b50251a` URL-sync variant, merged 2026-11-22T01:49:44Z while this session was in flight). Merge resolution: `d105b565`'s implementation kept verbatim; this branch carries only the additive regression tests + a complementary README paragraph. | done | `tests/jsdom-render-test.mjs`, `README.md` (JS taken from `main`) |
+| `AA6C-2` | Verification pass: `npm test`, `node tests/run-all.mjs`, live fetches of the deployed pages incl. `?date=2026-08-28` | done | — |
+| `AA6C-3` | Integration: PR → merge to `main` → confirm GitHub Pages deploy → record here | done | repo root (PR only) |
+
+## Log (`aa6c1d7b`)
+
+- 2026-11-22 — AA6C-1 **superseded by PR #23**: this session independently implemented `?date=` support (commit `820b7e4`: `urlDate()` read at init only; picker/day-nav unchanged), but `main` moved to `1e405cc` (merge of PR #23) while this branch was in flight — `d105b565` had merged a broader variant (`b50251a`: `?date=` honored in `parseDate()`, `history.replaceState` URL sync, picker read directly in `pickDate()`, scoreboard review banner links to `reviews.html?date=<selected>`, `tools/smoke-test.mjs` §[11] ×3 checks) at 2026-11-22T01:49:44Z. Merge resolution: **their JS kept verbatim** (my `urlDate()` hunks removed), nothing of theirs discarded; this branch keeps only (a) 10 jsdom regression checks (§3b) that pass against their implementation — verified locally, and (b) a complementary README deep-link paragraph. `README.md` also documents their file-tree annotations (unchanged).
+  - 2026-11-22 — Merge conflict resolution log: `git merge origin/main` conflicted in `COORDINATION.md` only. Auto-merged `assets/js/scoreboard.js` / `reviews-feed.js` / `README.md` initially produced a duplicated mix (my `urlDate()` next to their URL-aware `parseDate()`); the JS was hand-resolved to match `origin/main` exactly, and `COORDINATION.md` kept **both** session sections verbatim (this section updated as above). `tests/jsdom-render-test.mjs` merged cleanly. See below for the combined verification run.
+- 2026-11-22 — Audit vs the two cited sites. HTML shells are byte-near-identical (footer wording only). Functional gap found: `parseDate()` in this repo reads only the `date-picker` element; `window.location.search` is never consulted (`assets/js/scoreboard.js:42`, `assets/js/reviews-feed.js:85`). Verified on the live site: `LIVPBP/reviews.html?date=2026-08-28` and `LIVPBP/index.html?date=2026-08-28` render today (offseason, 0 games) instead of 2026-08-28, while `LIVPBP2/index.html?date=2026-08-28` renders all 15 Finals and `LIVPBP2/reviews.html?date=2026-08-28` renders 10 reviews & challenges / 79 ABS challenges for that date. POSTSSNALRT also ignores `?date=` (date-picker navigation only), so `?date=` support is taken from LIVPBP2, the cited site that has it. No other functional deltas found: `game.html?gamePk=` works here (verified live on gamePk 824638: header, linescore + per-row source links, ABS chips), `index.html` offseason slate notice + "Most recent date with games" jump button works (schedule-range endpoint confirmed: games listed through 2026-10-28), `flagged.html` renders.
+
+### 2026-11-22 — aa6c1d7b — INTEGRATION DONE
+
+- [PR #24](https://github.com/snapquast73-boop/LIVPBP/pull/24) **MERGED** at 2026-11-22T01:54:44Z, merge commit [`f22a84b`](https://github.com/snapquast73-boop/LIVPBP/commit/f22a84bfd424bad65a8962d84755d6a76ad5d2b6). Site checks on the PR head (`0336cf2`, then `0336cf2`-equivalent checks on `3d1c31f`): **test PASS + dom-smoke PASS**; the earlier `fb6c945` head also passed.
+- **Parallel-session race (important):** PR #23 (`d105b565`, merged 01:49:44Z) landed the same `?date=` fix while this branch was in flight, and PR #25 (`d105b565`, merged ~01:53Z) filled in the PR #23 record. Each `git merge origin/main` conflicted in `COORDINATION.md` only; both were resolved by keeping **both sessions' sections verbatim** (this section updated as above). The JS auto-merge duplicated my `urlDate()` next to their URL-aware `parseDate()` and was hand-resolved to match `origin/main` byte-for-byte — their implementation is live; this branch contributes the §3b regression tests + README paragraph. A stray `git pull --rebase` during the first resolution left the branch mid-rebase with the merge commit already pushed; the rebase was **aborted** (remote branch and PR were never rewritten). No force-push was used at any point.
+- **GitHub Pages:** [`pages/builds/latest`](https://api.github.com/repos/snapquast73-boop/LIVPBP/pages/builds/latest) → commit `f22a84b`, status **`built`** (confirmed 2026-11-22 ~01:56Z). Publishing source unchanged: `main` / root, legacy build.
+- **Live verification (2026-11-22, after the build):**
+  - [`/?date=2026-08-28`](https://snapquast73-boop.github.io/LIVPBP/?date=2026-08-28) → all 15 Finals render (CIN 10–8 CHC top card), “15 games · 15 final”.
+  - [`/reviews.html?date=2026-08-28`](https://snapquast73-boop.github.io/LIVPBP/reviews.html?date=2026-08-28) → **10 Reviews · 8 Challenges · 2 Umpire reviews · 79 ABS challenges · 2 runs at risk · 89 tracked entries · 15 games · Fri Aug 28, 2026** — matches the sibling working site LIVPBP2's rendering of the same date (10 reviews & challenges / 79 ABS challenges). Note: an initial fetch of the page served a stale cached render; re-fetch with a cache-buster confirmed the live values above.
+  - [`/`](https://snapquast73-boop.github.io/LIVPBP/) → offseason zero-games notice with the “Most recent date with games: Wed Oct 28, 2026 · Show it” jump button (verified against the live range endpoint).
+  - [`/game.html?gamePk=824638`](https://snapquast73-boop.github.io/LIVPBP/game.html?gamePk=824638) → full CIN 10–8 CHC header, linescore with per-row official source links, ABS chips (from PR #23's D-2 fix).
+  - [`/flagged.html`](https://snapquast73-boop.github.io/LIVPBP/flagged.html) → renders; sections 1–12 serve.
+- **Acceptance vs the user's cited sites:** this repo's Replay Feed and Scoreboard now match the behaviour of the cited working references for the same date — the GitHub Page is functional for uploaded-project review purposes. Remaining open items (unchanged, owner-reviewed on `flagged.html`): U-1, U-2, U-6…U-11, I-8, F-001…F-009, L-1…L-4, RR-05, D-1, D-3, D-4. This PR (#27) carries only this record.
+
+#### Note from session `d105b565` on the same collision (added here, after the entry above)
+
+Session `aa6c1d7b` implemented `?date=` deep links independently while this session was doing the
+same thing, and its PR #24 merged after PR #23. Nothing was lost and nothing was overwritten:
+
+- The **implementation** on `main` is this session's (`b50251a`, in `assets/js/scoreboard.js`
+  and `assets/js/reviews-feed.js`); `aa6c1d7b` kept it verbatim in `fb6c945` and did not
+  re-apply its own copies.
+- `aa6c1d7b`'s **additive** work stayed: its 10 jsdom regression checks
+  (`tests/jsdom-render-test.mjs` §3b) and its README deep-link bullet.
+- Combined state on `main` @ `f22a84b` re-checked by this session: `npm test` → **47 passed,
+  0 failed**; `node tests/run-all.mjs` → syntax OK · 40 local refs OK · 8 bindings OK ·
+  **47/47 jsdom** (their §3b checks + the original 37). GitHub Pages built `f22a84b`
+  ([`pages/builds/latest`](https://api.github.com/repos/snapquast73-boop/LIVPBP/pages/builds/latest)).
+- Lesson for later sessions: `assets/js/scoreboard.js` and `assets/js/reviews-feed.js` were a
+  hot spot twice in one hour — claim them on this board before editing.
+
+---
+
 # Session `arena/ca40f7ec-livpbp` — Non-Overlapping Provenance, Props & Stylesheet Polish (`2026-11-22`)
 
-- **Session ID:** `ca40f7ec` · **Branch (fixed by Arena):** `arena/ca40f7ec-livpbp`, rebased onto `main` @ [`5a71346`](https://github.com/snapquast73-boop/LIVPBP/commit/5a71346).
+- **Session ID:** `ca40f7ec` · **Branch (fixed by Arena):** `arena/ca40f7ec-livpbp`, merged with `main` @ [`1e67246`](https://github.com/snapquast73-boop/LIVPBP/commit/1e67246).
 - **Coordination & non-overlapping scope check (`2026-11-22`):**
-  - Merged session `d105b565` (PRs [#23](https://github.com/snapquast73-boop/LIVPBP/pull/23), [#25](https://github.com/snapquast73-boop/LIVPBP/pull/25)) completed its tasks on `main`.
-  - Active parallel branches inspected before claiming:
-    - `arena/aa6c1d7b-livpbp` (open PR [#24](https://github.com/snapquast73-boop/LIVPBP/pull/24)): owns `tests/jsdom-render-test.mjs` + `README.md`.
-    - `arena/af75fbfd-livpbp`: claimed `assets/js/{api,ui,reviews,scoreboard,game,reviews-feed,feed-log}.js`, `server.mjs`, `README.md`, `docs/*.md`, `flagged.html`, `tools/smoke-test.mjs`, `tests/jsdom-render-test.mjs`.
-  - To respect strict non-overlapping file scopes while parallel sessions are in flight, `ca40f7ec` claims **only unclaimed files**: `assets/js/props.js`, `assets/css/style.css`, and additive standalone verification test `tests/props-provenance-test.mjs` (plus append-only coordination notes here). Cross-scope observations for `flagged.html` / `server.mjs` / `reviews-feed.js` are logged below as handoff notes rather than conflicting edits while `af75fbfd` and `aa6c1d7b` hold active claims.
+  - Merged sessions `d105b565` (PRs [#23](https://github.com/snapquast73-boop/LIVPBP/pull/23), [#25](https://github.com/snapquast73-boop/LIVPBP/pull/25), [#26](https://github.com/snapquast73-boop/LIVPBP/pull/26)) and `aa6c1d7b` (PRs [#24](https://github.com/snapquast73-boop/LIVPBP/pull/24), [#27](https://github.com/snapquast73-boop/LIVPBP/pull/27)) completed their tasks on `main` (`COORDINATION.md` merge conflict resolved by preserving both sessions' entries verbatim).
+  - Active parallel branch `arena/af75fbfd-livpbp` holds claims on `assets/js/{api,ui,reviews,scoreboard,game,reviews-feed,feed-log}.js`, `server.mjs`, `README.md`, `docs/*.md`, `flagged.html`, `tools/smoke-test.mjs`, `tests/jsdom-render-test.mjs`.
+  - To respect strict non-overlapping file scopes while `af75fbfd` is in flight, `ca40f7ec` edited **only unclaimed files**: `assets/js/props.js`, `assets/css/style.css`, and additive standalone verification test `tests/props-provenance-test.mjs` (plus append-only coordination notes here). Cross-scope observations for `af75fbfd`'s scope are logged below as handoff notes rather than conflicting edits.
 
 ## Task Board (`arena/ca40f7ec-livpbp`)
 
@@ -548,5 +602,3 @@ node tools/restoration-check.mjs -> ALL CHECKS PASSED
 | Reference sites parity (`LIVPBP2` & `POSTSSNALRT`) vs `LIVPBP` on `2026-08-28` (`15` finals) and `2026-10-28` (`WS G5`) | [`LIVPBP2/reviews.html?date=2026-08-28`](https://snapquast73-boop.github.io/LIVPBP2/reviews.html?date=2026-08-28) · [`POSTSSNALRT/reviews.html`](https://snapquast73-boop.github.io/POSTSSNALRT/reviews.html) · [`schedule?date=2026-08-28`](https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=2026-08-28&hydrate=probablePitcher,linescore,decisions,review) | Verified: `?date=YYYY-MM-DD` deep links, `10` reviews & challenges / `79` ABS challenges on `2026-08-28`, offseason jump (`2026-10-28`), and `game.html?gamePk=824638` match working reference behavior |
 | Handoff note for `af75fbfd` (owns `assets/js/{api,game,reviews-feed,feed-log}.js` & `server.mjs`) | [`v1.1/game/824638/feed/live`](https://statsapi.mlb.com/api/v1.1/game/824638/feed/live?fields=gamePk,gameData,review,absChallenges,away,home,used,remaining,usedSuccessful,usedFailed,hasChallenges) · [`schedule?startDate=2025-10-01&endDate=2026-04-01`](https://statsapi.mlb.com/api/v1/schedule?sportId=1&startDate=2025-10-01&endDate=2026-04-01&fields=dates,date,totalGames) | Logged without touching claimed files: (1) winter offseason gap Nov 1 → Feb 20 is ~111 days if widening schedule-range lookback; (2) `game.js` in-review lean poll `fields` should include `isComplete` alongside `hasReview`; (3) `server.mjs` / `feed-log.js` `atBatIndex: 0` falsy `\|\|` merge key |
 | Automated checks (`props-provenance-test`, `smoke-test`, `restoration-check`, `run-all`) | [`tests/props-provenance-test.mjs`](tests/props-provenance-test.mjs) · [`tools/smoke-test.mjs`](tools/smoke-test.mjs) | `5/5` props provenance · `47/47` smoke · `ALL CHECKS PASSED` restoration · `47/47` jsdom render + syntax + link + contract |
-
-
