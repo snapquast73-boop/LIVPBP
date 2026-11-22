@@ -634,6 +634,13 @@
       </tbody>
     </table>
 
+    <h2>10. Checks you can run</h2>
+    <pre class="wrap" style="white-space:pre-wrap">npm install --no-save jsdom     # dev-only; the site itself has no dependencies
+node tests/run-all.mjs           # syntax · link check · DOM-contract check · end-to-end render
+node tests/jsdom-render-test.mjs --live   # same end-to-end render against the live StatsAPI
+node tools/smoke-test.mjs        # static routes + local server round-trip
+node server.mjs                  # optional persistence backend (feed log + SSE)</pre>
+
     <h2>11. Re-verification against the live StatsAPI (session <code>d105b565</code>, 2026-11-22)</h2>
     <p style="color:var(--muted);font-size:13px">
       Every row below was fetched on <strong>2026-11-22</strong> from the official
@@ -772,12 +779,6 @@
       status in sections 3–9 above; nothing in this pass contradicts them, and U-3/U-5 remain fixed.
     </p>
 
-    <h2>10. Checks you can run</h2>
-    <pre class="wrap" style="white-space:pre-wrap">npm install --no-save jsdom     # dev-only; the site itself has no dependencies
-node tests/run-all.mjs           # syntax · link check · DOM-contract check · end-to-end render
-node tests/jsdom-render-test.mjs --live   # same end-to-end render against the live StatsAPI
-node tools/smoke-test.mjs        # static routes + local server round-trip
-node server.mjs                  # optional persistence backend (feed log + SSE)</pre>
 
   </main>
 
