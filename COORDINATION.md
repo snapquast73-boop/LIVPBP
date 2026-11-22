@@ -574,3 +574,31 @@ same thing, and its PR #24 merged after PR #23. Nothing was lost and nothing was
   ([`pages/builds/latest`](https://api.github.com/repos/snapquast73-boop/LIVPBP/pages/builds/latest)).
 - Lesson for later sessions: `assets/js/scoreboard.js` and `assets/js/reviews-feed.js` were a
   hot spot twice in one hour — claim them on this board before editing.
+
+---
+
+# Session `arena/ca40f7ec-livpbp` — Non-Overlapping Provenance, Props & Stylesheet Polish (`2026-11-22`)
+
+- **Session ID:** `ca40f7ec` · **Branch (fixed by Arena):** `arena/ca40f7ec-livpbp`, merged with `main` @ [`1e67246`](https://github.com/snapquast73-boop/LIVPBP/commit/1e67246).
+- **Coordination & non-overlapping scope check (`2026-11-22`):**
+  - Merged sessions `d105b565` (PRs [#23](https://github.com/snapquast73-boop/LIVPBP/pull/23), [#25](https://github.com/snapquast73-boop/LIVPBP/pull/25), [#26](https://github.com/snapquast73-boop/LIVPBP/pull/26)) and `aa6c1d7b` (PRs [#24](https://github.com/snapquast73-boop/LIVPBP/pull/24), [#27](https://github.com/snapquast73-boop/LIVPBP/pull/27)) completed their tasks on `main` (`COORDINATION.md` merge conflict resolved by preserving both sessions' entries verbatim).
+  - Active parallel branch `arena/af75fbfd-livpbp` holds claims on `assets/js/{api,ui,reviews,scoreboard,game,reviews-feed,feed-log}.js`, `server.mjs`, `README.md`, `docs/*.md`, `flagged.html`, `tools/smoke-test.mjs`, `tests/jsdom-render-test.mjs`.
+  - To respect strict non-overlapping file scopes while `af75fbfd` is in flight, `ca40f7ec` edited **only unclaimed files**: `assets/js/props.js`, `assets/css/style.css`, and additive standalone verification test `tests/props-provenance-test.mjs` (plus append-only coordination notes here). Cross-scope observations for `af75fbfd`'s scope are logged below as handoff notes rather than conflicting edits.
+
+## Task Board (`arena/ca40f7ec-livpbp`)
+
+| Task ID | Task Description | Status | Owning Session | File Scope | Official Source |
+| --- | --- | --- | --- | --- | --- |
+| `CA40-1` | Per-row official MLB StatsAPI `https://` source links on `<table class="driver-table">` in `assets/js/props.js` + honest season-total provenance note on historical/completed games (`U-6` / `I-4`) | `done` | `arena/ca40f7ec-livpbp` | `assets/js/props.js`, `assets/css/style.css` | [MLB `people/{id}/stats`](https://statsapi.mlb.com/api/v1/people/660271/stats?stats=season,statSplits,expectedStatistics&group=hitting&season=2026&sitCodes=vl,vr,h,a,d,n,risp) · [MLB `vsPlayer`](https://statsapi.mlb.com/api/v1/people/694192/stats?stats=vsPlayer&group=hitting&opposingPlayerId=656876) |
+| `CA40-2` | Style `.driver-table` and per-row `.src-cell` cleanly in `assets/css/style.css` without altering existing rules | `done` | `arena/ca40f7ec-livpbp` | `assets/css/style.css` | [`assets/css/style.css` on `main`](https://github.com/snapquast73-boop/LIVPBP/blob/main/assets/css/style.css) |
+| `CA40-3` | Standalone regression test `tests/props-provenance-test.mjs` verifying every rendered `<table class="driver-table">` row has a verified official `statsapi.mlb.com` source link and zero fabricated values | `done` | `arena/ca40f7ec-livpbp` | `tests/props-provenance-test.mjs` | [MLB `game/824638/feed/live`](https://statsapi.mlb.com/api/v1.1/game/824638/feed/live) |
+| `CA40-4` | Merge-preserving integration: merge latest `main` (preserving PRs #24, #26, #27), run full test suites, open & merge PR, confirm GitHub Pages deploy, and record here | `in progress` | `arena/ca40f7ec-livpbp` | `COORDINATION.md` | [GitHub Pages API](https://api.github.com/repos/snapquast73-boop/LIVPBP/pages) |
+
+### Verification & Cross-Scope Handoff Notes (`ca40f7ec`)
+
+| Check / Handoff Item | Official Source | Result / Status |
+| --- | --- | --- |
+| Live StatsAPI `people/{id}/stats` (`season`, `expectedStatistics.avg`, `statSplits`, `gameLog`) & `vsPlayer` (`vsPlayerTotal`) | [`people/660271/stats`](https://statsapi.mlb.com/api/v1/people/660271/stats?stats=season,statSplits,expectedStatistics&group=hitting&season=2026&sitCodes=vl,vr) · [`people/694192/stats?stats=vsPlayer`](https://statsapi.mlb.com/api/v1/people/694192/stats?stats=vsPlayer&group=hitting&opposingPlayerId=656876) | Verified: `Props.renderPropsTab` now renders `<table class="driver-table">` where every `<tr>` carries a direct `td.src-cell` link to the exact official `statsapi.mlb.com` endpoint its input came from (`people/{id}/stats`, `vsPlayer`, or `game/{pk}/feed/live`), plus Batter/Pitcher card `MLB API ↗` links and an explicit `U-6` disclosure on historical/completed games |
+| Reference sites parity (`LIVPBP2` & `POSTSSNALRT`) vs `LIVPBP` on `2026-08-28` (`15` finals) and `2026-10-28` (`WS G5`) | [`LIVPBP2/reviews.html?date=2026-08-28`](https://snapquast73-boop.github.io/LIVPBP2/reviews.html?date=2026-08-28) · [`POSTSSNALRT/reviews.html`](https://snapquast73-boop.github.io/POSTSSNALRT/reviews.html) · [`schedule?date=2026-08-28`](https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=2026-08-28&hydrate=probablePitcher,linescore,decisions,review) | Verified: `?date=YYYY-MM-DD` deep links, `10` reviews & challenges / `79` ABS challenges on `2026-08-28`, offseason jump (`2026-10-28`), and `game.html?gamePk=824638` match working reference behavior |
+| Handoff note for `af75fbfd` (owns `assets/js/{api,game,reviews-feed,feed-log}.js` & `server.mjs`) | [`v1.1/game/824638/feed/live`](https://statsapi.mlb.com/api/v1.1/game/824638/feed/live?fields=gamePk,gameData,review,absChallenges,away,home,used,remaining,usedSuccessful,usedFailed,hasChallenges) · [`schedule?startDate=2025-10-01&endDate=2026-04-01`](https://statsapi.mlb.com/api/v1/schedule?sportId=1&startDate=2025-10-01&endDate=2026-04-01&fields=dates,date,totalGames) | Logged without touching claimed files: (1) winter offseason gap Nov 1 → Feb 20 is ~111 days if widening schedule-range lookback; (2) `game.js` in-review lean poll `fields` should include `isComplete` alongside `hasReview`; (3) `server.mjs` / `feed-log.js` `atBatIndex: 0` falsy `\|\|` merge key |
+| Automated checks (`props-provenance-test`, `smoke-test`, `restoration-check`, `run-all`) | [`tests/props-provenance-test.mjs`](tests/props-provenance-test.mjs) · [`tools/smoke-test.mjs`](tools/smoke-test.mjs) | `5/5` props provenance · `47/47` smoke · `ALL CHECKS PASSED` restoration · `47/47` jsdom render + syntax + link + contract |
