@@ -41,11 +41,17 @@
     NW: 'Def Shift Violation',
   };
 
-  /* Reasons that the API classifies under the boundary-call family
-   * (potential home run / fair-foul / catch-or-trap at the wall). */
+  /* Boundary-call reviews per the uploaded README: "boundary-call reviews
+   * (potential home runs / fair-foul at the wall)" with "NH = boundary-call
+   * review" and "boundary reviews are not charged to a team's counter" — so a
+   * boundary call is an umpire-side review (registry N* family) of a home run,
+   * fair/foul at the wall, or stadium-boundary play. A *manager challenge* of
+   * one of those plays (registry MH/MD/MO/MT/MS, "Manager challenge: …") is a
+   * charged challenge, not a boundary review. Verified 2026-11-22 against
+   * GET /api/v1/gameStatus and matching LIVPBP2's classification
+   * (audit/reference-parity-2026-11-22.md). */
   var BOUNDARY_REASONS = [
-    'Home run', 'Fair/foul in outfield', 'Catch/drop in outfield',
-    'Trap play in outfield', 'Stadium boundary call',
+    'Home run', 'Fair/foul in outfield', 'Stadium boundary call',
   ];
 
   /* Event types the API itself flags as an undecided official-scorer ruling
@@ -93,7 +99,8 @@
       typeLabel: typeLabel,
       reason: reason,
       detailedState: detailed,
-      isBoundary: BOUNDARY_REASONS.indexOf(reason) !== -1 || clean === 'NH',
+      isBoundary: !isABS && family !== 'manager' &&
+        (BOUNDARY_REASONS.indexOf(reason) !== -1 || clean === 'NH'),
     };
   }
 
@@ -613,7 +620,13 @@
     return notes.length ? notes : null;
   }
 
-  /* Both-teams official challenges-remaining summary (hover / live strip). */
+  /* Both-teams summary from the uploaded README:
+   * "Challenges left: CIN 1 MGR · 2 ABS — CHC 1 MGR · 2 ABS" — shown on hover
+   * of a row's counter and on the Under-Review live strip. Team labels come
+   * from meta.awayLabel/meta.homeLabel (or meta.awayAbbr/homeAbbr). Official
+   * counters only: an absent counter (pre-ABS seasons have no absChallenges
+   * object) is omitted, never zero-filled; if nothing is known the summary
+   * is ''. */
   function countersSummary(meta) {
     if (!meta) return '';
     function sideSummary(side, abbr) {
@@ -625,8 +638,8 @@
       if (!bits.length) return '';
       return (abbr || (side === 'away' ? 'Away' : 'Home')) + ' ' + bits.join(' · ');
     }
-    var awayPart = sideSummary('away', meta.awayAbbr);
-    var homePart = sideSummary('home', meta.homeAbbr);
+    var awayPart = sideSummary('away', meta.awayLabel || meta.awayAbbr);
+    var homePart = sideSummary('home', meta.homeLabel || meta.homeAbbr);
     if (!awayPart && !homePart) return '';
     return 'Challenges left: ' + (awayPart || '—') + ' — ' + (homePart || '—');
   }
@@ -634,6 +647,10 @@
   /* Largest-angle counter line used on feed rows and the live strip. */
   function counterLine(meta) {
     if (!meta) return '';
+    /* The uploaded README shows the challenging team's abbreviation as a
+     * prefix: "CIN: 2 ABS challenges left now (2 successful · 0 failed)" /
+     * "PIT: 1 manager challenge left now (0 used)". */
+    var prefix = meta.label ? meta.label + ': ' : '';
     var parts = [];
     if (meta.manager && meta.manager[meta.side]) {
       var m = meta.manager[meta.side];
@@ -652,7 +669,7 @@
           (bits.length ? bits.join(' · ') : 'used not published') + ')');
       }
     }
-    return parts.join(' · ');
+    return prefix + parts.join(' · ');
   }
 
   global.Reviews = {

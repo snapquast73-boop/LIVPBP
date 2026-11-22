@@ -663,3 +663,38 @@ same thing, and its PR #24 merged after PR #23. Nothing was lost and nothing was
   - [`/flagged.html`](https://snapquast73-boop.github.io/LIVPBP/flagged.html) → sections 1–13 (`AF-1..AF-7`) live, `95/95` rows carrying verified official `https://` source links and blank cells on unconfirmed values.
 
 
+
+---
+
+# Session `arena/6e2a58d9-livpbp` — reference-parity functional pass (2026-11-22)
+
+- **Session ID:** `6e2a58d9` (branch fixed by Arena to `arena/6e2a58d9-livpbp`, from `main` @ `59a7351`). F-001 applies: no `session-<id>/<task>` branches; all work on this branch, integration by PR to `main`.
+- **Brief:** make the site functionally work like the user-supplied references ([LIVPBP2/reviews.html](https://snapquast73-boop.github.io/LIVPBP2/reviews.html), [POSTSSNALRT/reviews.html](https://snapquast73-boop.github.io/POSTSSNALRT/reviews.html)), keeping everything else unchanged. Where the references disagree, the surviving original contract (uploaded `README.md` + `reviews.html` at `aef1a74c`) decides; irreconcilable items are flagged, never inferred.
+- **Claimed at:** 2026-11-22. No other session holds active claims on the files below (all prior boards closed; `S1f-4`/`RR-05` are `needs review` = non-blocking).
+
+## Task board (`arena/6e2a58d9-livpbp`)
+
+| Task | Status | Session | File scope | Notes |
+|---|---|---|---|---|
+| G-1 Replay feed `?date=` deep link + URL sync (LIVPBP2 parity: honors `?date=YYYY-MM-DD`, keeps URL in step when navigating) | **superseded — already done on `main` by `d105b565` (PR #23) and re-tested by `aa6c1d7b` (PR #24)** | `6e2a58d9` (verify only) | — | Same fix landed while this session was claiming; verified on the rebased tree instead of re-implemented (see the conflict log below) |
+| G-2 Feed empty-state message (both references render one; ours renders a blank list) | done | `6e2a58d9` | `assets/js/reviews-feed.js` | Sources: [LIVPBP2](https://snapquast73-boop.github.io/LIVPBP2/reviews.html?date=2026-08-28) "No matching review events for this date/filter." · [POSTSSNALRT](https://snapquast73-boop.github.io/POSTSSNALRT/reviews.html) "No tracked events for this filter yet…" |
+| G-3 Alert chime for new **official-scorer pending rulings** and **official scoring changes** (original `reviews.html` button title lists both; ours chimes on neither) | done | `6e2a58d9` | `assets/js/reviews-feed.js` | Source: uploaded `reviews.html` L39 button title (`aef1a74c`) — "a gentle raindrop chime for new challenges/reviews/boundary calls, official-scorer pending rulings and official scoring changes (not ABS), and the same chime whenever an active review could remove a run already on the scoreboard" |
+| G-4 Challenges-remaining tracker per uploaded README: team-prefix counter line (`CIN: 2 ABS challenges left now (…)`), both-teams summary `Challenges left: … — …` **on hover** and **on the Under-Review live strip** (ours has no prefix, no summary, empty strip) | done | `6e2a58d9` | `assets/js/reviews.js`, `assets/js/reviews-feed.js` | Source: uploaded `README.md` L50–54 (`aef1a74c`) + [LIVPBP2 countersSummary](https://github.com/snapquast73-boop/LIVPBP2/blob/cbcdddece88023ca512a18b7a1165b77d2caa7a7/assets/js/reviews.js#L156-L170). LIVPBP2 also shows the summary as a visible row line — flagged as a reference discrepancy, not copied (README says hover + strip) |
+| G-5 "score impact pending" for a boundary review with no currently credited run (README; ours shows nothing) | done | `6e2a58d9` | `assets/js/reviews-feed.js` | Source: uploaded `README.md` L31–33 (`aef1a74c`); [LIVPBP2 render](https://github.com/snapquast73-boop/LIVPBP2/blob/cbcdddece88023ca512a18b7a1165b77d2caa7a7/assets/js/reviews-feed.js#L522-L525) |
+| G-6 Regression checks for G-1…G-9; full suites stay green | done | `6e2a58d9` | `tools/smoke-test.mjs`, `tests/jsdom-render-test.mjs` (extend only) | `npm test`, `node tests/run-all.mjs`, `node tools/restoration-check.mjs` must pass |
+| G-7 Line-by-line reference-parity audit + flagged entries (RR-05 resolved: raindrop chime kept per README/LIVPBP2, POSTSSNALRT cha-ching deviation documented) | done | `6e2a58d9` | `audit/reference-parity-2026-11-22.md`, `flagged.html` (extend only) | Every claim links an official or first-party source; unverifiable originals stay blank |
+| G-8 Integration: PR → `main`, merge, confirm Pages, record here | claimed | `6e2a58d9` | `COORDINATION.md` | Do not merge a broken site; flagged items do not block |
+| G-9 Fixes found during the line-by-line pass: irregularity notes were misattributed to every row of a game; boundary-call classification included charged manager challenges (registry `MH`/`MD`/`MO`/`MT`/`MS` are "Manager challenge: …"); `counterRegression` was called with the wrong shape (no-op) | done | `6e2a58d9` | `assets/js/reviews.js`, `assets/js/reviews-feed.js`, `assets/css/style.css` | Sources: [gameStatus registry](https://statsapi.mlb.com/api/v1/gameStatus) · uploaded `README.md` ("NH = boundary-call review"; "boundary reviews are not charged"); recorded as R2-6/R2-8/R2-9 on `flagged.html` §14 |
+
+### Merge-conflict resolution log (2026-11-22, `6e2a58d9`)
+
+- `git pull --rebase origin main` conflicted in `COORDINATION.md` only: parallel sessions
+  `d105b565` (PR #23, merged `1e405cc`) and `aa6c1d7b` (PR #24, merged `f22a84b`) appended board
+  sections at the same spot while this session's claim was in flight (the claim conflicted twice,
+  against `f22a84b` and then against `44975d4`, and was consolidated into this single claim commit
+  on top of `main` @ `44975d4`). Resolution keeps **every** incoming session section verbatim and
+  appends this session's section after them. **Nothing of any other session was discarded or rewritten.** Both parallel
+  sessions had already merged the `?date=` deep-link fix this session planned as G-1 (their
+  implementations + the `d105b565` URL-sync variant are on `main`), so G-1 is marked superseded
+  and this session verifies the merged behavior instead of re-implementing it.
+- 2026-11-22 — Second merge-conflict resolution log (integration of this branch with `main` @ `8583382`, PRs #28–#31): while this session's G-1…G-9 pass was in flight, session `af75fbfd` independently completed an overlapping functional pass (its `AF-1…AF-7`, PRs #30/#31) and session `ca40f7ec` added props/style work (PRs #28/#29). `git merge origin/main` conflicted in `COORDINATION.md`, `assets/js/api.js`, `assets/js/reviews-feed.js`, `tools/smoke-test.mjs`, `flagged.html`; `assets/js/reviews.js` auto-merged with a duplicated `countersSummary` mix. Resolution principle: **keep every fix from both sides, discard nothing.** Result: (1) the deployed `af75fbfd` implementation is the base of `reviews-feed.js`/`api.js`/`reviews.js` (their ABS/MGR counter fetch + cache, `counterRegression` flat-and-nested, AF-3 "never infer the Before score", `offerRecentDate` offseason jump, `server.mjs`/`feed-log.js` hardening all kept verbatim); (2) this session's **unique** fixes were ported on top: G-2 empty-state notice, G-3 chimes for pending rulings / scoring changes / the moment runs-at-risk first becomes visible (once per review; restored rows pre-marked), G-5 "score impact pending", README `CIN:`-prefix counter lines, and G-9 entry-scoped irregularity attribution + game-level flagged rows; (3) `Reviews.countersSummary` is one function accepting both label key spellings; (4) `tools/smoke-test.mjs` keeps **both** regression sections (`af75fbfd`'s §[12] and this session's §[13], 12 checks); (5) `flagged.html` keeps both new sections (§13 `af75fbfd`, §14 `6e2a58d9`); (6) `api.js` took `af75fbfd`'s superset `gameFeed` (its extra `/playByPlay` bundle fallback plus the shared `opts.fields` projection). No force-push anywhere.

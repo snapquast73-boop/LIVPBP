@@ -1012,6 +1012,12 @@ table.driver-table td.src-cell a:hover { color: var(--accent); }
   border-left: 3px solid var(--amber);
   padding-left: 8px;
 }
+.feed-empty {
+  padding: 18px 10px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+}
 
 /* -------------------------------------------------------------- status line */
 .status-line {

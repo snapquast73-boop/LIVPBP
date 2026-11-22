@@ -1021,6 +1021,214 @@ console.log('\n[12] af75fbfd parity & provenance checks (ABS counters, no before
   feedDom2.window.close();
 }
 
+console.log('\n[13] reference-parity fixes (session 6e2a58d9: G-2…G-5, G-9)');
+{
+  const dom = await boot('reviews.html', { beforeParse(w) { w.localStorage.clear(); } });
+  await new Promise((r) => setTimeout(r, 900));
+  const doc = dom.window.document;
+  const w = dom.window;
+  const st = w.ReplayFeed.state;
+
+  await check('counterLine matches the uploaded README examples (team prefix)', () => {
+    const abs = w.Reviews.counterLine({
+      abs: { away: { usedSuccessful: 2, usedFailed: 0, remaining: 2 } },
+      side: 'away', label: 'CIN',
+    });
+    assert(abs === 'CIN: 2 ABS challenges left now (2 successful · 0 failed)',
+      'README example 1 mismatch: ' + abs);
+    const mgr = w.Reviews.counterLine({
+      manager: { away: { used: 0, remaining: 1 } },
+      side: 'away', label: 'PIT',
+    });
+    assert(mgr === 'PIT: 1 manager challenge left now (0 used)',
+      'README example 2 mismatch: ' + mgr);
+  });
+
+  await check('countersSummary matches the README example and never zero-fills absent counters', () => {
+    const s = w.Reviews.countersSummary({
+      manager: { away: { remaining: 1 }, home: { remaining: 1 } },
+      abs: { away: { remaining: 2 }, home: { remaining: 2 } },
+      awayLabel: 'CIN', homeLabel: 'CHC',
+    });
+    assert(s === 'Challenges left: CIN 1 MGR · 2 ABS — CHC 1 MGR · 2 ABS',
+      'README summary example mismatch: ' + s);
+    const noAbs = w.Reviews.countersSummary({
+      manager: { away: { remaining: 1 }, home: { remaining: 1 } },
+      abs: null, awayLabel: 'CIN', homeLabel: 'CHC',
+    });
+    assert(noAbs === 'Challenges left: CIN 1 MGR — CHC 1 MGR',
+      'absent ABS counters must be omitted, not zero-filled: ' + noAbs);
+    assert(w.Reviews.countersSummary({}) === '', 'no counters known -> empty summary');
+  });
+
+  await check('replay rows carry the challenges-remaining tracker with team prefix and hover summary', async () => {
+    /* Manager counters come from the schedule hydrate; ABS counters from the
+     * lean feed/live projection (both fixtures mirror the verified shapes). */
+    await new Promise((r) => setTimeout(r, 400));
+    w.ReplayFeed.setFilter('challenges');
+    const notes = [...doc.querySelectorAll('#feed-list .counter-note')].map((n) => n.textContent.trim());
+    assert(notes.includes('SEA: 0 manager challenges left now (1 used)'),
+      'MA counter line must carry the challenging team prefix: ' + JSON.stringify(notes));
+    assert(notes.includes('MIN: 1 manager challenge left now (1 used)'),
+      'MD (charged manager challenge) counter line wrong: ' + JSON.stringify(notes));
+    const titled = [...doc.querySelectorAll('#feed-list .counter-note')]
+      .find((n) => (n.getAttribute('title') || '').includes('Challenges left:'));
+    assert(titled, 'hover summary missing on counter lines');
+    assert(titled.getAttribute('title') === 'Challenges left: SEA 0 MGR · 2 ABS — MIN 1 MGR · 2 ABS',
+      'hover summary wrong: ' + titled.getAttribute('title'));
+    w.ReplayFeed.setFilter('abs');
+    const absNote = [...doc.querySelectorAll('#feed-list .counter-note')]
+      .find((n) => /ABS challenge/.test(n.textContent));
+    assert(absNote, 'ABS counter line missing on the ABS row (feed/live counters)');
+    assert(/^SEA: 2 ABS challenges left now \(0 successful · 1 failed\)$/.test(absNote.textContent.trim()),
+      'ABS counter line wrong: ' + absNote.textContent.trim());
+  });
+
+  await check('Under-Review strip carries the both-teams summary (README)', () => {
+    const strip = text(doc.getElementById('active-strip'));
+    assert(/Challenges left: SEA 0 MGR · 2 ABS — MIN 1 MGR · 2 ABS/.test(strip),
+      'summary missing from the Under-Review strip: ' + strip);
+  });
+
+  await check('boundary review with no credited run says "score impact pending" (README)', () => {
+    /* Seed an umpire-side NH boundary review (the fixture slate has none). */
+    st.entries.push({
+      id: '823109:99:seeded-boundary',
+      kind: 'review',
+      gamePk: 823109,
+      matchupLabel: 'SEA @ MIN',
+      teams: { away: { id: 136, name: 'Seattle Mariners' }, home: { id: 142, name: 'Minnesota Twins' } },
+      review: {
+        code: 'NH', family: 'umpire', typeLabel: 'Umpire Review', reason: 'Home run',
+        isABS: false, isBoundary: true, inProgress: false, runsAtRiskCount: 0,
+        outcome: 'Call Stands / Confirmed', inningLabel: 'Top 2',
+      },
+      scoreTracker: { before: { away: 2, home: 3 }, possible: null, actual: null },
+      lastSeen: Date.now(),
+    });
+    w.ReplayFeed.setFilter('all');
+    const html = text(doc.getElementById('feed-list'));
+    assert(html.includes('score impact pending'),
+      'boundary row must say "score impact pending" instead of inventing a score');
+    st.entries = st.entries.filter((e) => e.id !== '823109:99:seeded-boundary');
+    w.ReplayFeed.setFilter('all');
+  });
+
+  async function rescanAnd(fn) {
+    st.lastChimeAt = 0;
+    st.soundOn = true;
+    w.ReplayFeed.scan();
+    await new Promise((r) => setTimeout(r, 500));
+    while (st.scanning) await new Promise((r) => setTimeout(r, 50));
+    fn(st.lastChimeAt);
+    st.soundOn = false;
+  }
+
+  await check('G-3: new non-ABS review rows chime (challenges/reviews/boundary calls)', async () => {
+    const keep = st.entries.filter((e) => !(e.review && e.review.code === 'NA'));
+    assert(keep.length === st.entries.length - 1, 'expected exactly one NA row in fixtures');
+    st.entries = keep;
+    await rescanAnd((at) => assert(at > 0, 'new umpire-review row did not chime'));
+  });
+
+  await check('G-3: new official-scorer pending rulings chime', async () => {
+    const keep = st.entries.filter((e) => e.kind !== 'pending');
+    assert(keep.length < st.entries.length, 'expected a pending row in fixtures');
+    st.entries = keep;
+    await rescanAnd((at) => assert(at > 0, 'new pending ruling did not chime'));
+  });
+
+  await check('G-3: routine ABS pitch challenges never chime (uploaded button title)', async () => {
+    const keep = st.entries.filter((e) => !(e.review && e.review.isABS));
+    assert(keep.length < st.entries.length, 'expected an ABS row in fixtures');
+    st.entries = keep;
+    await rescanAnd((at) => {
+      assert(at === 0, 'routine ABS row must not chime, got lastChimeAt=' + at);
+      assert(st.entries.some((e) => e.review && e.review.isABS), 'ABS row should still be tracked');
+    });
+  });
+
+  await check('G-3: runs-at-risk chime fires once per review, then never again', async () => {
+    const ma = st.entries.find((e) => e.review && e.review.code === 'MA');
+    assert(ma && ma.review.runsAtRiskCount === 1, 'fixture MA row should carry 1 run at risk');
+    st.entries = st.entries.filter((e) => e !== ma);
+    await rescanAnd((at) => assert(at > 0, 'new runs-at-risk review did not chime'));
+    const again = st.entries.find((e) => e.review && e.review.code === 'MA');
+    assert(again && again.warned === true, 'risk chime must mark the row as warned');
+    await rescanAnd((at) => assert(at === 0, 'runs-at-risk review must not re-chime (fires once)'));
+  });
+
+  await check('G-3: official scoring changes chime and render in All', async () => {
+    let pbp = JSON.parse(JSON.stringify(PBP_823109));
+    const mutFetch = (url) => {
+      const u = String(url);
+      if (/\/game\/823109\/playByPlay/.test(u)) {
+        return Promise.resolve({
+          ok: true, status: 200, headers: { get: () => null },
+          json: async () => JSON.parse(JSON.stringify(pbp)),
+        });
+      }
+      return routeFetch(u);
+    };
+    const mutDom = await boot('reviews.html', { fetchImpl: mutFetch, beforeParse(x) { x.localStorage.clear(); } });
+    await new Promise((r) => setTimeout(r, 700));
+    const mst = mutDom.window.ReplayFeed.state;
+    /* Reclassify a completed play between polls (error→single style diff). */
+    pbp.allPlays[0].result.eventType = 'field_error';
+    pbp.allPlays[0].result.description = 'Reached on error.';
+    await new Promise((resolve) => {
+      mst.lastChimeAt = 0;
+      mst.soundOn = true;
+      mutDom.window.ReplayFeed.scan();
+      setTimeout(resolve, 500);
+    });
+    while (mst.scanning) await new Promise((r) => setTimeout(r, 50));
+    assert(mst.entries.some((e) => e.kind === 'scoring_change'),
+      'reclassification between polls must create a scoring-change row');
+    assert(mst.lastChimeAt > 0, 'new official scoring change must chime');
+    mutDom.window.ReplayFeed.setFilter('all');
+    const html = text(mutDom.window.document.getElementById('feed-list'));
+    assert(html.includes('Official Scoring Change'), 'scoring change must render in All');
+    mutDom.window.close();
+  });
+
+  await check('G-2: empty slate renders an empty-state notice, not a blank list', async () => {
+    const emptyFetch = (url) => {
+      if (String(url).includes('/schedule?')) {
+        return Promise.resolve({
+          ok: true, status: 200, headers: { get: () => null },
+          json: async () => ({ totalGames: 0, dates: [] }),
+        });
+      }
+      return routeFetch(url);
+    };
+    const emptyDom = await boot('reviews.html', { fetchImpl: emptyFetch, beforeParse(x) { x.localStorage.clear(); } });
+    await new Promise((r) => setTimeout(r, 500));
+    const html = text(emptyDom.window.document.getElementById('feed-list'));
+    assert(/No tracked events for this date and filter yet/.test(html),
+      'empty-state notice missing: ' + html);
+    emptyDom.window.close();
+  });
+
+  await check('G-9: irregularity notes attach to their row; game-level notes render once', () => {
+    const target = st.entries.find((e) => e.kind === 'review');
+    assert(target && target.id, 'expected a review entry with an id');
+    st.irregularities = {};
+    st.irregularities[target.gamePk] = [
+      'Note naming ' + target.id + ' only',
+      'Game-level note for ' + target.gamePk,
+    ];
+    w.ReplayFeed.setFilter('all');
+    const html = text(doc.getElementById('feed-list'));
+    const rowCount = html.split('Note naming ' + target.id + ' only').length - 1;
+    assert(rowCount === 1, 'entry-scoped note must render exactly once (on its own row), got ' + rowCount);
+    const gameCount = html.split('Game-level note for ' + target.gamePk).length - 1;
+    assert(gameCount === 1, 'game-level note must render exactly once as a flagged row, got ' + gameCount);
+  });
+
+  dom.window.close();
+}
+
 function __setDate(dom) {
   const picker = dom.window.document.getElementById('date-picker');
   if (picker) {
